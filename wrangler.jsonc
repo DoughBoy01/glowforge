@@ -1,0 +1,75 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "glowforge",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+
+  "observability": {
+    "enabled": true
+  },
+
+  // Self-reference binding OpenNext uses for internal server-side fetches (ISR revalidation, etc).
+  "services": [
+    { "binding": "WORKER_SELF_REFERENCE", "service": "glowforge" }
+  ],
+
+  // Primary application database. Create with:
+  //   npx wrangler d1 create glowforge-db
+  // then paste the returned database_id below.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "glowforge-db",
+      "database_id": "62c758f0-add1-4e18-856e-d27160ab6252",
+      "migrations_dir": "drizzle"
+    }
+  ],
+
+  // Progress photos + generated share-card images. Create with:
+  //   npx wrangler r2 bucket create glowforge-photos
+  // ISR/data-cache store for OpenNext. Create with:
+  //   npx wrangler r2 bucket create glowforge-cache
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS_BUCKET",
+      "bucket_name": "glowforge-photos"
+    },
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "glowforge-cache"
+    }
+  ],
+
+  "vars": {
+    "NEXT_PUBLIC_APP_ENV": "production"
+  },
+
+  "env": {
+    "preview": {
+      "name": "glowforge-preview",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "glowforge-db-preview",
+          "database_id": "REPLACE_WITH_PREVIEW_D1_DATABASE_ID",
+          "migrations_dir": "drizzle"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "PHOTOS_BUCKET",
+          "bucket_name": "glowforge-photos-preview"
+        }
+      ],
+      "vars": {
+        "NEXT_PUBLIC_APP_ENV": "preview"
+      }
+    }
+  }
+}

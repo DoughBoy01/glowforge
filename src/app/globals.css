@@ -1,26 +1,391 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-roboto-mono);
+  --font-heading: var(--font-anton);
+  --font-script: var(--font-yellowtail);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* Safe-area + mobile-chrome sizes exposed to the spacing scale, so
+     `h-tabbar`, `pt-safe-t`, `mb-safe-b` etc. work as ordinary utilities. */
+  --spacing-safe-t: env(safe-area-inset-top);
+  --spacing-safe-b: env(safe-area-inset-bottom);
+  --spacing-safe-l: env(safe-area-inset-left);
+  --spacing-safe-r: env(safe-area-inset-right);
+  --spacing-tabbar: var(--tabbar-h);
+  --spacing-appbar: var(--appbar-h);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* Mobile chrome geometry. The tab bar and app bar are laid out from these
+     so page padding can reserve exactly the right amount of room without
+     every page hard-coding the same magic numbers. */
+  --tabbar-h: 3.75rem;
+  --appbar-h: 3.25rem;
+
+  /* Light mode: kept for system-light users, but GlowForge is dark-first.
+     Brand hues (magenta primary, cyan accent) darkened for light-bg contrast. */
+  --background: oklch(0.985 0.002 90);
+  --foreground: oklch(0.16 0.01 285);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.16 0.01 285);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.16 0.01 285);
+  --primary: #D40E67;
+  --primary-foreground: #ffffff;
+  --secondary: oklch(0.95 0.006 285);
+  --secondary-foreground: oklch(0.22 0.01 285);
+  --muted: oklch(0.95 0.006 285);
+  --muted-foreground: oklch(0.45 0.01 285);
+  --accent: #007D94;
+  --accent-foreground: #ffffff;
+  --destructive: #CE2929;
+  --border: oklch(0.9 0.006 285);
+  --input: oklch(0.9 0.006 285);
+  --ring: #D40E67;
+  --chart-1: #D40E67;
+  --chart-2: #007D94;
+  --chart-3: #C25E00;
+  --chart-4: #008A3A;
+  --chart-5: oklch(0.65 0.02 285);
+  --radius: 0.25rem;
+  --sidebar: oklch(0.97 0.003 285);
+  --sidebar-foreground: oklch(0.16 0.01 285);
+  --sidebar-primary: #D40E67;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: oklch(0.93 0.006 285);
+  --sidebar-accent-foreground: oklch(0.22 0.01 285);
+  --sidebar-border: oklch(0.9 0.006 285);
+  --sidebar-ring: #D40E67;
+}
+
+.dark {
+  /* Tactical: near-black violet base, neon magenta primary, cyan accent for
+     data/trust, amber + signal-green as chart support. Matches the
+     "GlowForge Tactical" design direction. */
+  --background: #07060D;
+  --foreground: #EDE9F7;
+  --card: #100C1D;
+  --card-foreground: #EDE9F7;
+  --popover: #120D22;
+  --popover-foreground: #EDE9F7;
+  --primary: #FF2E88;
+  --primary-foreground: #ffffff;
+  --secondary: #1C1530;
+  --secondary-foreground: #C9C4DA;
+  --muted: #171226;
+  --muted-foreground: #8A82A3;
+  --accent: #00E5FF;
+  --accent-foreground: #06262B;
+  --destructive: #E63939;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #FF2E88;
+  --chart-1: #FF2E88;
+  --chart-2: #00E5FF;
+  --chart-3: #FF7A00;
+  --chart-4: #00C853;
+  --chart-5: #8A82A3;
+  --sidebar: #0B0716;
+  --sidebar-foreground: #EDE9F7;
+  --sidebar-primary: #FF2E88;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1C1530;
+  --sidebar-accent-foreground: #EDE9F7;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #FF2E88;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* Display headings: Anton is single-weight, so block faux-bold synthesis
+     (pages tag h1s with font-bold); the italic is a deliberate synthetic
+     oblique — part of the identity. */
+  h1,
+  h2 {
+    /* var(--font-anton) directly: @theme inline tokens aren't emitted at
+       runtime, so --font-heading doesn't exist here. */
+    font-family: var(--font-anton);
+    font-style: italic;
+    font-synthesis-weight: none;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+
+  .dark ::selection {
+    background: var(--primary);
+    color: #fff;
+  }
+
+  /* CRT scanline wash over the whole app — static (not animated) so it costs
+     nothing to composite. pointer-events: none keeps it purely cosmetic. */
+  .dark body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(255, 255, 255, 0.02) 0px,
+      rgba(255, 255, 255, 0.02) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+
+  /* ---------------------------------------------------------------------
+     Native-app behaviours
+     ------------------------------------------------------------------ */
+
+  html {
+    /* Stops iOS inflating text in landscape. */
+    -webkit-text-size-adjust: 100%;
+    /* The grey flash Android/iOS paint on tap reads as "web page"; every
+       interactive surface below defines its own :active state instead. */
+    -webkit-tap-highlight-color: transparent;
+    /* Kills the whole-document rubber-band in standalone mode, which
+       otherwise fights the custom pull-to-refresh. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  /* Skip the 300ms click delay without disabling pinch-zoom (the viewport
+     stays user-scalable for accessibility). */
+  a,
+  button,
+  label,
+  summary,
+  [role="button"],
+  [role="tab"],
+  [data-slot="button"],
+  [data-slot="switch"] {
+    touch-action: manipulation;
+  }
+
+  /* Long-press on app chrome should feel like a native control, not text. */
+  [data-app-chrome] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer components {
+  /* ---------------------------------------------------------------------
+     Touch ergonomics — applied by input type, not by viewport width, so a
+     touchscreen laptop gets the same generosity a phone does and a desktop
+     mouse keeps the compact density the design was drawn at.
+     ------------------------------------------------------------------ */
+
+  @media (pointer: coarse) {
+    [data-slot="button"],
+    [data-slot="select-trigger"],
+    [data-slot="dropdown-menu-item"],
+    [data-slot="sidebar-menu-button"] {
+      min-height: 2.75rem;
+      min-width: 2.75rem;
+    }
+
+    /* Genuinely inline affordances (a clear-field ✕, a chip dismiss) would
+       look broken at 44px; they opt out and rely on surrounding padding. */
+    [data-slot="button"][data-size="xs"],
+    [data-slot="button"][data-size="icon-xs"] {
+      min-height: 2rem;
+      min-width: 2rem;
+    }
+
+    [data-slot="input"],
+    [data-slot="textarea"],
+    [data-slot="select-trigger"] {
+      /* Below 16px iOS zooms the viewport on focus. */
+      font-size: 1rem;
+      min-height: 2.75rem;
+    }
+
+    [data-slot="switch"] {
+      min-height: 1.75rem;
+    }
+
+    /* Fat-finger target around the slider grip without changing its size. */
+    [data-slot="slider-thumb"]::after {
+      content: "";
+      position: absolute;
+      inset: -0.625rem;
+    }
+  }
+
+  /* ---------------------------------------------------------------------
+     Safe-area utilities. `max(...)` keeps them harmless on hardware with no
+     inset (and on desktop), where env() resolves to 0px.
+     ------------------------------------------------------------------ */
+
+  .pt-safe {
+    padding-top: max(env(safe-area-inset-top), 0px);
+  }
+  .pb-safe {
+    padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  }
+  /* Horizontal safe-area padding with a floor, so it composes with the
+     layout's own gutter instead of replacing it: `px-safe` alone hugs the
+     edges, `[--gutter:1rem] px-safe` keeps a 1rem gutter and only grows
+     past it on hardware that needs the room (landscape notch). */
+  .px-safe {
+    padding-left: max(var(--gutter, 0px), env(safe-area-inset-left));
+    padding-right: max(var(--gutter, 0px), env(safe-area-inset-right));
+  }
+  .inset-x-safe {
+    left: max(env(safe-area-inset-left), 0px);
+    right: max(env(safe-area-inset-right), 0px);
+  }
+  /* Bottom padding for scrollable page content that sits under the tab bar:
+     home indicator + bar height + a comfortable gap. */
+  .pb-tabsafe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + var(--tabbar-h) + 1.25rem);
+  }
+  /* Same, for a sheet or modal footer that has no tab bar beneath it. */
+  .pb-sheetsafe {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+  /* Parks a sticky action bar directly on top of the tab bar. */
+  .bottom-tabsafe {
+    bottom: calc(env(safe-area-inset-bottom) + var(--tabbar-h));
+  }
+
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Horizontal card rails (the mobile pattern for what is a grid on
+     desktop) — snap so a flick always lands on a card boundary. */
+  .snap-rail {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
+    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .snap-rail > * {
+    scroll-snap-align: start;
+    flex: none;
+  }
+
+  /* Press feedback. Touch has no hover, so the tap itself has to answer —
+     a fast, slight scale reads as "physical" the way :hover never can. */
+  .press {
+    transition:
+      transform 120ms cubic-bezier(0.2, 0, 0.2, 1),
+      background-color 120ms ease,
+      opacity 120ms ease;
+  }
+  .press:active {
+    transform: scale(0.975);
+  }
+  .press-sm:active {
+    transform: scale(0.99);
+  }
+}
+
+@layer utilities {
+  /* Page-level enter animation. Kept in CSS (rather than a motion library)
+     so it costs nothing and runs on the compositor. */
+  @keyframes gf-page-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 6px, 0);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .animate-page-in {
+    animation: gf-page-in 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  @keyframes gf-sheet-in {
+    from {
+      transform: translate3d(0, 100%, 0);
+    }
+    to {
+      transform: none;
+    }
+  }
+}
+
+/* Anyone who has asked the OS to calm motion down gets a static UI — the
+   gestures still work, they just don't animate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .press:active,
+  .press-sm:active {
+    transform: none;
+  }
 }

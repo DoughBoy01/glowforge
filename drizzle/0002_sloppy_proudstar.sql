@@ -1,0 +1,1 @@
+ALTER TABLE `routines` ADD `source` text DEFAULT 'manual' NOT NULL;

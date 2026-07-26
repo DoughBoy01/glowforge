@@ -18,6 +18,12 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // Generated — Serwist-compiled service worker, Cloudflare runtime types.
+      "public/sw.js",
+      "public/swe-worker-*.js",
+      "cloudflare-env.d.ts",
+      ".open-next/**",
+      ".wrangler/**",
     ],
   },
 ];
