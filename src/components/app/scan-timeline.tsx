@@ -99,7 +99,7 @@ export function ScanTimeline({ scans }: { scans: TimelineScan[] }) {
                       );
                     })}
                     {scan.analysis?.skinAge != null && (
-                      <span className="tabular-nums">Age {scan.analysis.skinAge}</span>
+                      <span className="tabular-nums">Face age {scan.analysis.skinAge}</span>
                     )}
                   </div>
                 </div>

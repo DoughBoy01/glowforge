@@ -4,18 +4,20 @@ import { ArrowLeftRight, ArrowRight, ChevronLeft, ChevronRight } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { MetricTrendChart } from "@/components/app/metric-trend-chart";
-import { SkinAgeChart } from "@/components/app/skin-age-chart";
+import { FaceAgeChart } from "@/components/app/face-age-chart";
 import { ConcernTrends } from "@/components/app/concern-trends";
 import { ScanTimeline } from "@/components/app/scan-timeline";
 import { DeltaBadge } from "@/components/app/delta-badge";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { getDb } from "@/db";
 import { getScanHistory, countScans, getConcernScoresForScans } from "@/db/queries/scans";
 import {
   buildProgressSummary,
   buildChartRows,
-  buildSkinAgeSeries,
+  buildFaceAgeSeries,
   buildConcernTrends,
 } from "@/lib/progress";
+import { FACE_AGE_LABEL, FACE_AGE_MISSION } from "@/lib/face-age";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Progress" };
@@ -78,7 +80,7 @@ export default async function ProgressPage({
 
   const summary = buildProgressSummary(history, totalScans);
   const chartRows = buildChartRows(history);
-  const skinAgeSeries = buildSkinAgeSeries(history);
+  const faceAgeSeries = buildFaceAgeSeries(history);
   const concernTrends = buildConcernTrends(concernRows, history);
 
   const windowStart = summary.firstScanAt;
@@ -109,10 +111,30 @@ export default async function ProgressPage({
               }
             />
           )}
-          {/* The tab bar already carries check-in on mobile. */}
-          <Button className="max-md:hidden" render={<Link href="/check-in">New check-in</Link>} />
+          {/* Visible at every width: check-in left the tab bar when the cadence
+              went to four weeks, so this and the home board are how it's
+              reached now. */}
+          <Button className="flex-1 sm:flex-none" render={<Link href="/check-in">New check-in</Link>} />
         </div>
       </div>
+
+      {/* Ahead of the score stats, not after them. This page's job is to answer
+          "is it working?", and the score cards below are the follow-up question
+          of "why". */}
+      {faceAgeSeries.length > 0 && (
+        <Card className="border-border/60">
+          <CardHeader>
+            <CardTitle>{FACE_AGE_LABEL}</CardTitle>
+            <CardDescription>
+              {FACE_AGE_MISSION} Estimated from each analysed photo and only ever compared
+              against your own history — never against your real age, which we don&apos;t ask for.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FaceAgeChart points={faceAgeSeries} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
         <StatCard
@@ -124,6 +146,7 @@ export default async function ProgressPage({
               : "Your baseline"
           }
           delta={summary.overall.allTimeDelta}
+          showLevel
         />
         <StatCard
           label="Last 30 days"
@@ -178,28 +201,14 @@ export default async function ProgressPage({
         <CardHeader>
           <CardTitle>Score history</CardTitle>
           <CardDescription>
-            Every check-in in view, plotted on the date it was captured. Switch metrics to see which
-            category is driving your overall score.
+            What&apos;s driving the line above. Every check-in in view, plotted on the date it was
+            captured — switch metrics to see which category is doing the work.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <MetricTrendChart rows={chartRows} />
         </CardContent>
       </Card>
-
-      {skinAgeSeries.length > 0 && (
-        <Card className="border-border/60">
-          <CardHeader>
-            <CardTitle>Skin age</CardTitle>
-            <CardDescription>
-              Estimated from each analyzed photo. Only ever compared against your own history.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SkinAgeChart points={skinAgeSeries} />
-          </CardContent>
-        </Card>
-      )}
 
       <ConcernTrends trends={concernTrends} />
 
@@ -254,11 +263,13 @@ function StatCard({
   value,
   footer,
   delta,
+  showLevel = false,
 }: {
   label: string;
   value: number | null;
   footer: string;
   delta: number | null;
+  showLevel?: boolean;
 }) {
   return (
     <Card className="border-border/60">
@@ -270,6 +281,7 @@ function StatCard({
           <span className="font-mono text-3xl font-bold tabular-nums">{value ?? "—"}</span>
           <DeltaBadge delta={delta} />
         </div>
+        {showLevel && value !== null && <ScoreLevelBadge score={value} />}
         <span className="text-xs text-muted-foreground">{footer}</span>
       </CardContent>
     </Card>

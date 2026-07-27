@@ -31,11 +31,22 @@ const LEVEL_COPY: Record<PriorityLevel, { label: string; guidance: string }> = {
   },
 };
 
-function levelForScore(score: number): PriorityLevel {
+export function levelForScore(score: number): PriorityLevel {
   if (score < 40) return "critical";
   if (score < 60) return "needs_work";
   if (score < 80) return "on_track";
   return "excellent";
+}
+
+/**
+ * The qualitative read on a bare 0-100 score, for any screen that shows one
+ * without the surrounding context `getCategoryPriorities` builds. Every
+ * tracked metric and the overall composite share this scale — higher is
+ * always better — so one threshold set covers both.
+ */
+export function scoreLevelLabel(score: number): { level: PriorityLevel; label: string } {
+  const level = levelForScore(score);
+  return { level, label: LEVEL_COPY[level].label };
 }
 
 /**
@@ -69,13 +80,18 @@ export interface SkinAgeInsight {
   message: string;
 }
 
-/** Skin age is only ever compared to the user's own history — we don't collect chronological age. */
+/**
+ * Face age is only ever compared to the user's own history — we don't collect
+ * chronological age, so there is no "younger than you are" claim available here.
+ * The field keeps the vendor's `skinAge` name; every user-facing surface calls it
+ * face age via `FACE_AGE_LABEL`.
+ */
 export function getSkinAgeInsight(
   skinAge: number,
   previousSkinAge: number | null,
 ): SkinAgeInsight {
   const delta = previousSkinAge === null ? null : skinAge - previousSkinAge;
-  let message = `Estimated skin age: ${skinAge}.`;
+  let message = `Estimated face age: ${skinAge}.`;
   if (delta !== null && delta !== 0) {
     message +=
       delta < 0
@@ -104,10 +120,13 @@ const PROJECTED_GAIN: Record<PriorityLevel, number> = {
 
 /**
  * Pairs each category's current score with a realistic near-term target,
- * for the "current vs improved" visualization on the results page. This is
- * intentionally a projection grounded in the user's own measured scores —
- * not a synthesized "after" photo, which would be both misleading and
- * outside what any of our data actually supports.
+ * for the "current vs improved" visualization on the results page.
+ *
+ * These gains are also the realism reference the goal *image* is tuned
+ * against — `@/lib/face-simulation` caps its simulation intensities so the
+ * rendered picture describes roughly the same 8-12 week outcome these bars
+ * do. If `PROJECTED_GAIN` moves, that model should move with it, or the page
+ * will show a picture and a number that disagree.
  */
 export function getProjectedScores(priorities: CategoryPriority[]): ProjectedScore[] {
   return priorities.map((p) => ({

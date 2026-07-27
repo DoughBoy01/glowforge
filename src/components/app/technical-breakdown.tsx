@@ -29,8 +29,8 @@ export function TechnicalBreakdown({ concerns, scanId }: { concerns: ConcernScor
       <CardHeader>
         <CardTitle>The technical read</CardTitle>
         <CardDescription>
-          Raw signal from your photo, worst first — tap a heatmap to see exactly where it was
-          detected.
+          Raw signal from your photo, worst first — 100 is the healthiest a signal can score. Tap
+          a heatmap to see exactly where it was detected.
         </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-x-8 gap-y-5 sm:grid-cols-2">

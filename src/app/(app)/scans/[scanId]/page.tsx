@@ -7,17 +7,21 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
 import { MetricCard } from "@/components/app/metric-card";
-import { SkinAgeBadge } from "@/components/app/skin-age-badge";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
+import { FaceAgeBadge } from "@/components/app/face-age-badge";
 import { ShareButton } from "@/components/app/share-button";
 import { AnalysisStatus } from "@/components/app/analysis-status";
 import { ResultsAnalyzing } from "@/components/app/results-analyzing";
 import { TechnicalBreakdown } from "@/components/app/technical-breakdown";
 import { ScoreProjection } from "@/components/app/score-projection";
+import { GoalPreview } from "@/components/app/goal-preview";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
 import { getDb } from "@/db";
 import { getScanById, getPreviousScan } from "@/db/queries/scans";
+import { getSimulationForScan } from "@/db/queries/skin-simulations";
 import { TRACKED_METRICS, METRIC_META, OVERALL_META, scoreForMetric, trackedScores } from "@/lib/metrics";
 import { getCategoryPriorities, getProjectedScores, getSkinAgeInsight } from "@/lib/insights";
+import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildDailyRoutines } from "@/lib/daily-routine";
 import { formatDate } from "@/lib/format";
 
@@ -71,6 +75,14 @@ export default async function ScanResultsPage({
     uiScore: c.uiScore,
     hasMask: c.maskUrl != null,
   })) ?? [];
+
+  // The goal image.
+  const simulation = frontPhoto ? await getSimulationForScan(db, userId!, scan.id) : null;
+  const goalPreview = resolveGoalPreview({
+    simulation,
+    concernScores: scan.analysis?.concernScores ?? [],
+    priorities,
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 md:gap-6">
@@ -143,6 +155,7 @@ export default async function ScanResultsPage({
                 label={OVERALL_META.label}
                 className="size-40 md:size-30"
               />
+              <ScoreLevelBadge score={overall ?? 0} />
             </Card>
             <Card className="border-border/60">
               <CardHeader>
@@ -163,6 +176,10 @@ export default async function ScanResultsPage({
             </Card>
           </div>
 
+          {/* Above the four metric cards, not fifth in the row with them. This
+              is what the check-in was for; those are the reasons behind it. */}
+          {skinAgeInsight && <FaceAgeBadge insight={skinAgeInsight} />}
+
           <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
             {TRACKED_METRICS.map((metric) => (
               <MetricCard
@@ -172,11 +189,30 @@ export default async function ScanResultsPage({
                 previousScore={previousScores?.[metric] ?? null}
               />
             ))}
-            {skinAgeInsight && <SkinAgeBadge insight={skinAgeInsight} />}
           </div>
 
           {concernScores.length > 0 && (
             <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
+          )}
+
+          {/* The goal, twice: once as a picture and once as numbers. The
+              image is the one people feel; the bars are the one they can
+              check against their next scan. Neither replaces the other, and
+              the image never appears without them. */}
+          {/* Not when the analysis failed: the simulation is chained off a
+              successful one, so no row will ever appear and the card would
+              sit there loading forever. A user with manual scores and a
+              failed analysis reaches this branch, which is the only way that
+              combination happens. */}
+          {frontPhoto && !aiFailed && (
+            <GoalPreview
+              scanId={scan.id}
+              status={simulation?.status ?? null}
+              goalLabel={goalLabel(goalPreview.goal)}
+              summary={goalPreview.summary}
+              params={goalPreview.params}
+              horizonWeeks={goalPreview.goal.horizonWeeks}
+            />
           )}
 
           {projected.length > 0 && (

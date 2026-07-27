@@ -62,8 +62,14 @@ export function buildMetricSeries(
   return series;
 }
 
-/** Skin age over time — only succeeded analyses carry a value. */
-export function buildSkinAgeSeries(history: ScanHistoryEntry[]): TrendPoint[] {
+/**
+ * Face age over time — only succeeded analyses carry a value.
+ *
+ * Scoped to the page of history it's handed, so the chart matches the rows
+ * beneath it. The *mission's* baseline can't come from here for that same
+ * reason — see `getFaceAgeReadings`, which reads the complete series.
+ */
+export function buildFaceAgeSeries(history: ScanHistoryEntry[]): TrendPoint[] {
   return toChronological(history).flatMap((scan) =>
     scan.analysis?.status === "succeeded" && scan.analysis.skinAge != null
       ? [{ scanId: scan.id, date: scan.capturedAt, score: scan.analysis.skinAge }]

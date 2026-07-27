@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Sparkline } from "@/components/app/sparkline";
 import { DeltaBadge } from "@/components/app/delta-badge";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { METRIC_META, type TrackedMetric } from "@/lib/metrics";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
@@ -100,6 +101,7 @@ export function MetricRail({ items }: { items: MetricRailItem[] }) {
                     </span>
                     <DeltaBadge delta={delta} emptyLabel="baseline" />
                   </div>
+                  <ScoreLevelBadge score={item.score} />
                   <Sparkline
                     values={item.history}
                     width={220}

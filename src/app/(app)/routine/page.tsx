@@ -31,8 +31,13 @@ import { LogCompletionButton } from "@/components/app/log-completion-button";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
 import { SaveRoutineButton } from "@/components/app/save-routine-button";
 import { getDb } from "@/db";
-import { getActiveRoutines, getCompletionDates, getRoutineStreak } from "@/db/queries/routines";
+import {
+  getActiveRoutines,
+  getCompletionsByRoutine,
+  deriveRoutineProgress,
+} from "@/db/queries/routines";
 import { getRoutinePlan } from "@/lib/routine-plan";
+import { FACE_AGE_LABEL } from "@/lib/face-age";
 import { todayLocalDate, formatShortDate } from "@/lib/format";
 import { createRoutineAction } from "./actions";
 
@@ -49,26 +54,36 @@ const TIME_LABEL: Record<string, string> = {
 export default async function RoutinePage() {
   const { userId } = await auth();
   const db = getDb();
-  const [routines, plan] = await Promise.all([
+  // All three in one batch. The streaks and today's state used to be fetched per
+  // routine *after* the routine list arrived — two statements each, in a second
+  // serial round trip — which on a phone meant nothing rendered until both hops
+  // had finished.
+  const [routines, plan, completions] = await Promise.all([
     getActiveRoutines(db, userId!),
     getRoutinePlan(db, userId!),
+    getCompletionsByRoutine(db, userId!),
   ]);
   const today = todayLocalDate();
 
-  const routineDetails = await Promise.all(
-    routines.map(async (routine) => ({
-      routine,
-      streak: await getRoutineStreak(db, userId!, routine.id),
-      doneToday: (await getCompletionDates(db, userId!, routine.id, 1)).includes(today),
-    })),
-  );
+  const routineDetails = routines.map((routine) => ({
+    routine,
+    ...deriveRoutineProgress(completions, routine.id, today),
+  }));
 
   const hasGenerated = routines.some((r) => r.source === "generated");
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 md:gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Routine</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">Routine</h1>
+          {/* Says what the screen is in service of. Skincare acts on
+              pigmentation, texture and the eye area, which is exactly what the
+              scan grades — so this is a claim the measurement supports. */}
+          <p className="text-sm text-muted-foreground">
+            The daily work behind your {FACE_AGE_LABEL.toLowerCase()}.
+          </p>
+        </div>
         <BottomSheet>
           {/* Secondary on purpose: the plan below is already built, and the
               manual builder is the escape hatch for someone who wants to

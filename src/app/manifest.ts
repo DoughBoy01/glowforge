@@ -25,8 +25,10 @@ export default function manifest(): MetadataRoute.Manifest {
       { src: "/icon/192", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icon/512", sizes: "512x512", type: "image/png", purpose: "any" },
     ],
-    // Long-press the installed icon to jump straight to the two things
-    // people open the app to do.
+    // Long-press the installed icon to jump straight in. Check-in stays here
+    // even though it left the tab bar — a long-press shortcut is exactly the
+    // right home for something deliberate you do once a month, which is what a
+    // permanent tab was not.
     shortcuts: [
       {
         name: "New check-in",

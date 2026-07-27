@@ -18,6 +18,8 @@ export const ANALYTICS_EVENTS = {
   AI_ANALYSIS_REQUESTED: "ai_analysis_requested",
   AI_ANALYSIS_COMPLETED: "ai_analysis_completed",
   AI_ANALYSIS_FAILED: "ai_analysis_failed",
+  GOAL_SIMULATION_COMPLETED: "goal_simulation_completed",
+  GOAL_SIMULATION_FAILED: "goal_simulation_failed",
 
   // Viral loop
   SHARE_CARD_CREATED: "share_card_created",

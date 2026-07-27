@@ -132,43 +132,58 @@ export async function logRoutineCompletion(
   return completion;
 }
 
-export async function getCompletionDates(
-  db: Database,
-  userId: string,
-  routineId: string,
-  limit = 120,
-) {
+/**
+ * How far back the batched completion read goes. Streaks only ever need an
+ * unbroken run ending today, so truncating deep history can't produce a wrong
+ * answer for anyone whose streak is shorter than this — and for anyone whose
+ * isn't, it understates rather than inventing one.
+ */
+const COMPLETION_WINDOW_ROWS = 400;
+
+/**
+ * Every recent completion the user has, grouped by routine id.
+ *
+ * One statement for the whole screen, and it replaced a per-routine read that
+ * fetched each routine's dates separately. That shape issued a statement per
+ * routine, and because the routine list only exists *after* the routines have
+ * loaded, the whole batch landed as a second serial round trip to D1 — on a
+ * phone, the difference between one hop and two before anything could render.
+ *
+ * Keyed by routine id rather than returning flat rows so callers don't each
+ * reinvent the grouping; pair it with `deriveRoutineProgress`.
+ */
+export async function getCompletionsByRoutine(db: Database, userId: string) {
   const rows = await db.query.routineCompletions.findMany({
-    where: and(
-      eq(routineCompletions.userId, userId),
-      eq(routineCompletions.routineId, routineId),
-    ),
+    where: eq(routineCompletions.userId, userId),
+    columns: { routineId: true, completedDate: true },
     orderBy: [desc(routineCompletions.completedDate)],
-    limit,
+    limit: COMPLETION_WINDOW_ROWS,
   });
-  return rows.map((r) => r.completedDate);
+
+  const byRoutine = new Map<string, string[]>();
+  for (const row of rows) {
+    const dates = byRoutine.get(row.routineId);
+    if (dates) dates.push(row.completedDate);
+    else byRoutine.set(row.routineId, [row.completedDate]);
+  }
+  return byRoutine;
 }
 
 /**
- * Which routines are already logged today. One query for all of them, so the
- * home screen can decide whether "log your routine" is still the next thing
- * to do without a round trip per routine.
+ * Streak and today's state for each routine, from one batched read.
+ *
+ * `today` is threaded through rather than re-derived per routine so every
+ * routine on a screen is judged against the same calendar day — a page that
+ * renders across midnight would otherwise report two different todays.
  */
-export async function getRoutineIdsCompletedOn(
-  db: Database,
-  userId: string,
-  date: string = todayLocalDate(),
-) {
-  const rows = await db.query.routineCompletions.findMany({
-    where: and(
-      eq(routineCompletions.userId, userId),
-      eq(routineCompletions.completedDate, date),
-    ),
-  });
-  return rows.map((r) => r.routineId);
-}
-
-export async function getRoutineStreak(db: Database, userId: string, routineId: string) {
-  const dates = await getCompletionDates(db, userId, routineId);
-  return computeStreak(dates);
+export function deriveRoutineProgress(
+  completions: Map<string, string[]>,
+  routineId: string,
+  today: string = todayLocalDate(),
+): { streak: number; doneToday: boolean } {
+  const dates = completions.get(routineId) ?? [];
+  return {
+    streak: computeStreak(dates, today),
+    doneToday: dates.includes(today),
+  };
 }

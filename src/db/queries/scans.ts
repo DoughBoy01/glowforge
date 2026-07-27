@@ -1,6 +1,6 @@
-import { and, count, desc, eq, inArray, lt } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import type { Database } from "@/db";
-import { scans, scanPhotos, metricScores, skinConcernScores } from "@/db/schema";
+import { scans, scanPhotos, metricScores, skinAnalyses, skinConcernScores } from "@/db/schema";
 import {
   TRACKED_METRICS,
   computeOverallScore,
@@ -72,12 +72,20 @@ export async function createScan(db: Database, input: NewScanInput) {
   return { scan, overall };
 }
 
+/**
+ * Recent scans for the home screen's sparklines and deltas.
+ *
+ * No `photos` relation, deliberately: the home screen doesn't render any, and
+ * pulling a dozen scans' worth of photo rows over D1 to throw them away is pure
+ * latency on the first paint of the app's most-visited page. `getScanHistory`
+ * and `getScanById` include them, for the screens that actually show them.
+ */
 export async function getRecentScans(db: Database, userId: string, limit = 30) {
   return db.query.scans.findMany({
     where: eq(scans.userId, userId),
     orderBy: [desc(scans.capturedAt)],
     limit,
-    with: { metricScores: true, photos: true, analysis: true },
+    with: { metricScores: true, analysis: true },
   });
 }
 
@@ -166,6 +174,67 @@ export async function getMetricTrend(
     .orderBy(desc(scans.capturedAt))
     .limit(limit);
   return rows.reverse();
+}
+
+/**
+ * Every face age the user has on record, oldest first — the backing query for
+ * the mission readout on the home screen.
+ *
+ * Deliberately its own query rather than something derived from the scan blobs
+ * a page already loaded, for two reasons. It has to be the *complete* history,
+ * because the baseline is what the mission is scored against and the dashboard
+ * only ever loads a dozen recent scans — deriving the baseline from those would
+ * redefine "where you started" every time someone checked in. And it's three
+ * columns off an indexed status filter, so asking for all of it costs less than
+ * the twelve-scan relational fetch it replaces the need for.
+ */
+export async function getFaceAgeReadings(db: Database, userId: string) {
+  const rows = await db
+    .select({
+      scanId: scans.id,
+      capturedAt: scans.capturedAt,
+      faceAge: skinAnalyses.skinAge,
+    })
+    .from(skinAnalyses)
+    .innerJoin(scans, eq(skinAnalyses.scanId, scans.id))
+    .where(
+      and(
+        eq(skinAnalyses.userId, userId),
+        eq(skinAnalyses.status, "succeeded"),
+        isNotNull(skinAnalyses.skinAge),
+      ),
+    )
+    .orderBy(scans.capturedAt);
+
+  // `isNotNull` already excludes the nulls; the filter is here to convince the
+  // type checker, since drizzle types the column as nullable regardless.
+  return rows.flatMap((row) =>
+    row.faceAge === null ? [] : [{ ...row, faceAge: row.faceAge }],
+  );
+}
+
+/**
+ * The two things a goal-image panel needs for a scan that `getRecentScans`
+ * doesn't already carry: whether it has a front photo, and its raw concern
+ * scores (to re-derive the simulation's labels and focus flags — see
+ * `resolveGoalPreview`). Split out rather than added to `getRecentScans`'s
+ * `with` clause, which deliberately excludes photos across the dozen scans
+ * that feeds the dashboard's sparklines — this is one scan, not twelve.
+ */
+export async function getScanGoalContext(db: Database, userId: string, scanId: string) {
+  const [photo, concernScores] = await Promise.all([
+    db.query.scanPhotos.findFirst({
+      where: and(
+        eq(scanPhotos.scanId, scanId),
+        eq(scanPhotos.userId, userId),
+        eq(scanPhotos.angle, "front"),
+      ),
+    }),
+    db.query.skinConcernScores.findMany({
+      where: and(eq(skinConcernScores.scanId, scanId), eq(skinConcernScores.userId, userId)),
+    }),
+  ]);
+  return { hasFrontPhoto: !!photo, concernScores };
 }
 
 /** Full scan detail for the results page — includes photos and the AI analysis (with its raw concern scores) alongside the metric rollup. */

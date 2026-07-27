@@ -1,9 +1,18 @@
-import { concernsForQuality, type YouCamQuality } from "./constants";
+import {
+  concernsForQuality,
+  YOUCAM_SIMULATION_TASK_ENDPOINT,
+  type YouCamQuality,
+  type SimulationParam,
+} from "./constants";
 import {
   createSkinAnalysisTask,
+  createSkinSimulationTask,
+  extractResultUrl,
   pollTaskUntilComplete,
   uploadImageForAnalysis,
+  uploadImageForSimulation,
 } from "./client";
+import { YouCamError } from "./errors";
 import { parseTaskResult, type ParsedAnalysisResult } from "./transform";
 
 export * from "./errors";
@@ -11,7 +20,10 @@ export * from "./types";
 export * from "./constants";
 export {
   uploadImageForAnalysis,
+  uploadImageForSimulation,
   createSkinAnalysisTask,
+  createSkinSimulationTask,
+  extractResultUrl,
   getTaskStatus,
   pollTaskUntilComplete,
 } from "./client";
@@ -61,5 +73,62 @@ export async function analyzeImage(params: {
     providerFileId,
     providerTaskId,
     rawResult: statusResponse,
+  };
+}
+
+export interface SimulateImageResult {
+  providerFileId: string;
+  providerTaskId: string;
+  /** Rendered image bytes, already downloaded — the vendor's URL expires in 2 hours, so this never hands back a link. */
+  bytes: ArrayBuffer;
+  contentType: string;
+}
+
+/**
+ * Vendor-only orchestration for a goal image: upload -> create simulation
+ * task -> poll -> download the result. Same no-database rule as
+ * `analyzeImage`; deciding *what* intensities to send lives in
+ * `@/lib/face-simulation`, and persistence lives in the db query module.
+ *
+ * The download happens here rather than at the call site because the
+ * presigned result URL is valid for two hours and is the one part of this
+ * flow that cannot be retried later from stored state.
+ */
+export async function simulateImage(params: {
+  bytes: ArrayBuffer;
+  contentType: string;
+  fileName: string;
+  intensities: Partial<Record<SimulationParam, number>>;
+}): Promise<SimulateImageResult> {
+  const providerFileId = await uploadImageForSimulation({
+    bytes: params.bytes,
+    contentType: params.contentType,
+    fileName: params.fileName,
+  });
+
+  const providerTaskId = await createSkinSimulationTask({
+    fileId: providerFileId,
+    intensities: params.intensities,
+  });
+
+  const statusResponse = await pollTaskUntilComplete(providerTaskId, {
+    endpoint: YOUCAM_SIMULATION_TASK_ENDPOINT,
+  });
+
+  const resultUrl = extractResultUrl(statusResponse);
+  if (!resultUrl) {
+    throw new YouCamError("YouCam simulation succeeded but returned no result URL");
+  }
+
+  const res = await fetch(resultUrl);
+  if (!res.ok) {
+    throw new YouCamError(`Downloading simulation result failed: HTTP ${res.status}`);
+  }
+
+  return {
+    providerFileId,
+    providerTaskId,
+    bytes: await res.arrayBuffer(),
+    contentType: res.headers.get("Content-Type") ?? "image/jpeg",
   };
 }

@@ -20,6 +20,7 @@ import {
 import { captureServerEvent } from "@/lib/analytics/server";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { getSkinAgeInsight } from "@/lib/insights";
+import { runGoalSimulationForScan } from "@/lib/goal-simulation";
 
 /** Maps any thrown error to a stored (code, user-facing message) pair. */
 function describeFailure(err: unknown): { code: string; message: string } {
@@ -163,6 +164,20 @@ export async function runSkinAnalysisForScan(params: {
         concernCount: result.concerns.length,
         trackedMetricCount: Object.keys(trackedMetrics).length,
       },
+    });
+
+    // The goal image is derived from the scores just written, so it can only
+    // run now — and it runs last, so a slow second vendor round trip doesn't
+    // hold up the analysis result the page is polling for. Awaited rather
+    // than detached: we're already inside `waitUntil`, and a second loose
+    // promise would race the Worker's shutdown. It records its own failures
+    // rather than throwing — see `runGoalSimulationForScan`.
+    await runGoalSimulationForScan({
+      userId: params.userId,
+      scanId: params.scanId,
+      r2Key: params.r2Key,
+      concernScores: concerns,
+      trackedMetrics,
     });
   } catch (err) {
     const { code, message } = describeFailure(err);

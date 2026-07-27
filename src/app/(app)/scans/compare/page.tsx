@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
 import { DeltaBadge } from "@/components/app/delta-badge";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { ScanComparePicker } from "@/components/app/scan-compare-picker";
 import { ShareButton } from "@/components/app/share-button";
 import { getDb } from "@/db";
 import { getScanHistory, getScanById, getConcernScoresForScans } from "@/db/queries/scans";
 import { compareScans, compareConcerns } from "@/lib/progress";
+import { FACE_AGE_LABEL } from "@/lib/face-age";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Compare check-ins" };
@@ -142,7 +144,7 @@ export default async function CompareScansPage({
           ))}
           {earlierAge !== null && laterAge !== null && (
             <div className="flex items-center justify-between gap-4 py-2.5">
-              <span className="text-sm font-medium">Skin age</span>
+              <span className="text-sm font-medium">{FACE_AGE_LABEL}</span>
               <div className="flex items-baseline gap-3 font-mono text-sm tabular-nums">
                 <span className="text-muted-foreground">{earlierAge}</span>
                 <ArrowRight className="size-3 self-center text-muted-foreground" />
@@ -238,6 +240,7 @@ function ScanSide({
           label={formatDate(scan.capturedAt)}
           className="size-24 md:size-28"
         />
+        <ScoreLevelBadge score={overall} />
       </CardContent>
     </Card>
   );

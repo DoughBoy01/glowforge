@@ -2,11 +2,16 @@ import { METRIC_META } from "@/lib/metrics";
 import type { ProjectedScore } from "@/lib/insights";
 
 /**
- * "Current vs improved" visualization. Deliberately a grounded data
- * comparison (your measured score → a realistic near-term target) rather
- * than a synthesized before/after photo — we don't have a way to generate
- * a trustworthy "improved" image of someone's actual face, and faking one
- * would work against the trust this page is supposed to build.
+ * "Current vs improved" visualization: measured score → realistic near-term
+ * target, per category.
+ *
+ * This used to be the *only* goal visual, on the grounds that a synthesized
+ * "after" face would work against the trust the page is built to earn.
+ * `GoalPreview` now renders one anyway — but it doesn't replace this, and
+ * that's the point. The image is capped, derived from these same measurements
+ * and labelled as a simulation; these bars are the falsifiable version, the
+ * one the next scan can be checked against. Shipping the picture without them
+ * is what the original objection was actually about.
  */
 export function ScoreProjection({ scores }: { scores: ProjectedScore[] }) {
   return (

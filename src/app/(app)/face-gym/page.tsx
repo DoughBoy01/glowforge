@@ -8,6 +8,7 @@ import {
   FACE_GYM_ROUND_SECONDS,
   FACE_GYM_TOTAL_SECONDS,
 } from "@/lib/face-gym";
+import { FACE_AGE_LABEL } from "@/lib/face-age";
 
 export const metadata = {
   title: "Face Gym",
@@ -33,6 +34,18 @@ export default async function FaceGymPage() {
         <p className="font-mono text-xs font-bold tracking-[0.14em] text-muted-foreground uppercase tabular-nums">
           {FACE_GYM_EXERCISES.length} rounds · {FACE_GYM_ROUND_SECONDS}s each ·{" "}
           {Math.round(FACE_GYM_TOTAL_SECONDS / 60)} min
+        </p>
+        {/* The honest version of this screen's relationship to the mission.
+            Every other surface in the app ties its work to the face age number;
+            this one can't, because the scan grades skin — pigmentation, texture,
+            firmness, the eye area — and not muscle tone. Claiming otherwise
+            would be the easiest sentence to write here and the one that gets
+            found out at the next check-in. Better to say what it is and let it
+            stand on that. */}
+        <p className="max-w-prose border-l-2 border-border/70 pl-3 text-sm text-muted-foreground">
+          Worth knowing: your {FACE_AGE_LABEL.toLowerCase()} is scored from your skin, so this
+          won&apos;t show up there. It&apos;s the structure underneath — tracked on its own
+          streak, judged on turning up.
         </p>
       </div>
 

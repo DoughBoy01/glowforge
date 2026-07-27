@@ -5,26 +5,30 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
 import { MetricRail, type MetricRailItem } from "@/components/app/metric-rail";
-import { TrendChart } from "@/components/app/trend-chart";
+import { DeferredTrendChart } from "@/components/app/deferred-chart";
 import { ShareButton } from "@/components/app/share-button";
 import { PartnerTeaser } from "@/components/app/partner-teaser";
 import { AnalysisStatus } from "@/components/app/analysis-status";
 import { CategoryPriorities } from "@/components/app/category-priorities";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { TodayHeading } from "@/components/app/today-heading";
-import { NextActionCard } from "@/components/app/next-action-card";
+import { TodayBoard } from "@/components/app/today-board";
+import { FaceAgeHero } from "@/components/app/face-age-hero";
+import { GoalPreview } from "@/components/app/goal-preview";
 import { DeltaBadge } from "@/components/app/delta-badge";
 import { getDb } from "@/db";
-import { getRecentScans, getMetricTrend } from "@/db/queries/scans";
-import {
-  getActiveRoutines,
-  getRoutineStreak,
-  getRoutineIdsCompletedOn,
-} from "@/db/queries/routines";
+import { getRecentScans, getMetricTrend, getFaceAgeReadings, getScanGoalContext } from "@/db/queries/scans";
+import { getSimulationForScan } from "@/db/queries/skin-simulations";
+import { getActiveRoutines, getCompletionsByRoutine, deriveRoutineProgress } from "@/db/queries/routines";
+import { getFaceGymStats } from "@/db/queries/face-gym";
 import { getActivePartnerLinks } from "@/db/queries/partners";
 import { TRACKED_METRICS, OVERALL_META, scoreForMetric, type MetricType, type TrackedMetric } from "@/lib/metrics";
-import { getCategoryPriorities, getSkinAgeInsight } from "@/lib/insights";
-import { getNextAction } from "@/lib/home";
-import { formatShortDate } from "@/lib/format";
+import { getCategoryPriorities } from "@/lib/insights";
+import { buildFaceAgeMission, FACE_AGE_MISSION } from "@/lib/face-age";
+import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
+import { buildTodayBoard } from "@/lib/home";
+import { formatShortDate, todayLocalDate } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Home" };
 
@@ -43,13 +47,36 @@ export default async function HomePage() {
   const { userId } = await auth();
   const db = getDb();
 
-  const [recentScans, overallTrend, routines, partnerLinks, completedToday] = await Promise.all([
-    getRecentScans(db, userId!, SPARKLINE_SCANS),
-    getMetricTrend(db, userId!, "overall", 30),
-    getActiveRoutines(db, userId!),
-    getActivePartnerLinks(db),
-    getRoutineIdsCompletedOn(db, userId!),
-  ]);
+  // One parallel batch, and deliberately nothing awaited after it. Every number
+  // on this screen is derivable from these seven reads, so the page's time to
+  // first byte is the slowest single query rather than the sum of two rounds —
+  // which is what it was while the routine streaks were fetched per routine,
+  // after the routine list they depended on had already come back.
+  const [recentScans, overallTrend, routines, partnerLinks, faceGym, faceAgeReadings, completions] =
+    await Promise.all([
+      getRecentScans(db, userId!, SPARKLINE_SCANS),
+      getMetricTrend(db, userId!, "overall", 30),
+      getActiveRoutines(db, userId!),
+      getActivePartnerLinks(db),
+      getFaceGymStats(db, userId!),
+      getFaceAgeReadings(db, userId!),
+      getCompletionsByRoutine(db, userId!),
+    ]);
+
+  // Pinned once, so every routine on the screen is judged against the same
+  // calendar day even if the render straddles midnight.
+  const today = todayLocalDate();
+  // Streaks and "done today" both fall out of the one completions read, which
+  // also retires the separate query that used to answer the second question.
+  const progress = new Map(
+    routines.map((r) => [r.id, deriveRoutineProgress(completions, r.id, today)]),
+  );
+  const completedToday = routines.filter((r) => progress.get(r.id)!.doneToday).map((r) => r.id);
+  const bestStreak = routines.length
+    ? Math.max(...routines.map((r) => progress.get(r.id)!.streak))
+    : 0;
+
+  const mission = buildFaceAgeMission(faceAgeReadings);
 
   const [latest, previous] = recentScans;
   const overall = scoreFor(latest, "overall");
@@ -67,32 +94,20 @@ export default async function HomePage() {
     : null;
   const priorities = latest ? getCategoryPriorities(latestScores, previousScores) : [];
 
-  const skinAgeInsight =
-    latest?.analysis?.status === "succeeded" && latest.analysis.skinAge !== null
-      ? getSkinAgeInsight(
-          latest.analysis.skinAge,
-          previous?.analysis?.status === "succeeded" ? (previous.analysis.skinAge ?? null) : null,
-        )
-      : null;
-
-  const streaks = await Promise.all(
-    routines.map((r) => getRoutineStreak(db, userId!, r.id)),
-  );
-  const bestStreak = streaks.length ? Math.max(...streaks) : 0;
-
-  const nextAction = getNextAction({
+  const board = buildTodayBoard({
     lastScanAt: latest?.capturedAt ?? null,
-    routineCount: routines.length,
-    routinesLoggedToday: routines.filter((r) => completedToday.includes(r.id)).length,
+    routines,
+    completedRoutineIds: completedToday,
+    faceGym,
   });
 
   if (!latest) {
     return (
       <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-20 text-center md:py-24">
-        <h1 className="text-2xl font-bold">Log your baseline</h1>
+        <h1 className="text-2xl font-bold">Find out your face age</h1>
         <p className="text-sm text-muted-foreground">
-          Your first check-in sets the line everything else is measured against. Takes under
-          two minutes.
+          {FACE_AGE_MISSION} One check-in sets the number, and every reading after it is
+          measured against that first one. Takes under two minutes.
         </p>
         <Button
           size="lg"
@@ -106,6 +121,31 @@ export default async function HomePage() {
       </div>
     );
   }
+
+  // The goal image panel. A second, dependent round trip rather than folded
+  // into the batch above — it needs `latest.id`, which only exists once that
+  // batch has resolved. Skipped for the empty-state return above, so a
+  // brand-new user with zero scans doesn't pay for it.
+  const [scanGoalContext, simulation] = await Promise.all([
+    getScanGoalContext(db, userId!, latest.id),
+    getSimulationForScan(db, userId!, latest.id),
+  ]);
+  // No simulation row, and the analysis that would have chained into one
+  // finished a while ago: nothing is coming. Distinguishes "still generating,
+  // worth a spinner" from "never will be, worth nothing" — without this, a
+  // dashboard revisit for an old check-in from before this feature shipped
+  // would show a loading card that polls for two minutes and then vanishes,
+  // every single time.
+  const simulationStale =
+    !simulation &&
+    latest.analysis?.status === "succeeded" &&
+    latest.analysis.completedAt !== null &&
+    Date.now() - latest.analysis.completedAt.getTime() > 10 * 60_000;
+  const showGoalPreview =
+    scanGoalContext.hasFrontPhoto && latest.analysis?.status !== "failed" && !simulationStale;
+  const goalPreview = showGoalPreview
+    ? resolveGoalPreview({ simulation, concernScores: scanGoalContext.concernScores, priorities })
+    : null;
 
   // Oldest-first, so the sparklines read left-to-right like every other
   // chart in the app.
@@ -138,23 +178,28 @@ export default async function HomePage() {
 
       <AnalysisStatus scanId={latest.id} initialStatus={latest.analysis?.status ?? null} />
 
-      {/* `order` rather than two separate trees: a phone reads score → what
-          to do → the chart, while desktop puts score and chart side by side
-          and drops the prompt underneath. */}
+      {/* The mission first, then the work that feeds it, then the diagnostics.
+          The composite score used to sit here — but a 0-100 number has no
+          natural target, while "fewer years than you started with" does, so the
+          ring moved below the fold to sit with the other measurements it belongs
+          to. */}
+      <FaceAgeHero mission={mission} />
+
+      <TodayBoard board={board} />
+
       <div className="grid gap-4 md:grid-cols-[auto_1fr]">
         <Link
           href={`/scans/${latest.id}`}
-          className="order-1 block outline-none md:rounded-xl md:focus-visible:ring-3 md:focus-visible:ring-ring/50"
+          className="block outline-none rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50"
         >
-          {/* Full-bleed band on a phone: this is the whole first screen, and
-              insetting it by a gutter wastes the width the ring wants. */}
-          <Card className="press -mx-4 h-full rounded-none ring-0 [--card-spacing:--spacing(6)] md:mx-0 md:justify-center md:rounded-xl md:ring-1">
+          <Card className="press h-full md:justify-center">
             <CardContent className="flex flex-col items-center gap-3">
               <ScoreRing
                 score={overall ?? 0}
                 label={OVERALL_META.label}
-                className="size-48 md:size-35"
+                className="size-40 md:size-35"
               />
+              <ScoreLevelBadge score={overall ?? 0} />
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
                 <DeltaBadge delta={overallDelta} emptyLabel="Baseline" />
                 {previous && (
@@ -163,21 +208,20 @@ export default async function HomePage() {
                   </span>
                 )}
               </div>
-              {skinAgeInsight && (
-                <span className="font-mono text-xs text-muted-foreground tabular-nums">
-                  Skin age {skinAgeInsight.skinAge}
-                </span>
-              )}
-              <span className="flex items-center gap-1 font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase md:hidden">
+              {/* Says what the ring is *for*, which the number alone doesn't.
+                  These four scores are the diagnosis behind the face age above —
+                  the reason it moved, not a second scoreboard. */}
+              <p className="max-w-[16rem] text-center text-xs text-balance text-muted-foreground">
+                What&apos;s driving your face age — the four things the scan grades.
+              </p>
+              <span className="flex items-center gap-1 font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
                 Full results <ChevronRight className="size-3.5" />
               </span>
             </CardContent>
           </Card>
         </Link>
 
-        <NextActionCard action={nextAction} className="order-2 md:order-3 md:col-span-2" />
-
-        <Card className="order-3 border-border/60 md:order-2">
+        <Card className="border-border/60">
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
               <CardTitle>Overall trend</CardTitle>
@@ -195,7 +239,7 @@ export default async function HomePage() {
             />
           </CardHeader>
           <CardContent>
-            <TrendChart
+            <DeferredTrendChart
               data={overallTrend.map((row) => ({
                 date: row.capturedAt,
                 score: row.score,
@@ -205,40 +249,113 @@ export default async function HomePage() {
         </Card>
       </div>
 
+      {/* Same card as the results page, same reasoning for keeping it here:
+          this is the goal made visible, and a goal worth persisting toward
+          is worth seeing on every visit, not just the day it was scanned. */}
+      {goalPreview && (
+        <GoalPreview
+          scanId={latest.id}
+          status={simulation?.status ?? null}
+          goalLabel={goalLabel(goalPreview.goal)}
+          summary={goalPreview.summary}
+          params={goalPreview.params}
+          horizonWeeks={goalPreview.goal.horizonWeeks}
+        />
+      )}
+
       <MetricRail items={metricItems} />
 
       <CategoryPriorities priorities={priorities} />
 
+      {/* Both daily habits, side by side. Two streaks rather than one because
+          they're independent — someone can be word-perfect on skincare and
+          have never once opened the gym — and a single "best streak" number
+          would quietly report the better of the two as if it were both. */}
       <Card className="border-border/60">
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <div className="min-w-0">
-            <CardTitle>Routine streak</CardTitle>
-            <CardDescription>
-              {routines.length
-                ? `${routines.length} active routine${routines.length > 1 ? "s" : ""}`
-                : "No routines yet"}
-            </CardDescription>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 font-mono text-2xl font-bold">
-            <Flame className="size-6 text-primary" />
-            {bestStreak}
-          </div>
+        <CardHeader>
+          <CardTitle>Streaks</CardTitle>
+          <CardDescription>Consecutive days, and what it takes to keep them.</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="w-full sm:w-auto"
-            render={<Link href="/routine">Manage routine</Link>}
+        <CardContent className="grid gap-3 sm:grid-cols-2">
+          <StreakTile
+            href="/routine"
+            label="Routine"
+            days={bestStreak}
+            footer={
+              routines.length
+                ? `${routines.length} active routine${routines.length > 1 ? "s" : ""}`
+                : "No routines yet"
+            }
+          />
+          <StreakTile
+            href="/face-gym"
+            label="Face Gym"
+            days={faceGym.streak}
+            footer={
+              faceGym.totalSessions
+                ? `${faceGym.totalSessions} session${faceGym.totalSessions > 1 ? "s" : ""} · best ${faceGym.bestStreak}d`
+                : "Never trained"
+            }
           />
         </CardContent>
       </Card>
 
       <PartnerTeaser links={partnerLinks} />
 
-      {/* The tab bar owns check-in and the hero opens the full results, so
-          sharing is the one action left worth a button at the end of the
-          scroll, where the thumb already is. */}
+      {/* The board at the top owns check-in and the hero opens the full
+          results, so sharing is the one action left worth a button at the end
+          of the scroll, where the thumb already is. */}
       <ShareButton scanId={latest.id} className="w-full md:hidden" />
     </div>
+  );
+}
+
+/**
+ * One habit's streak. The flame only lights once there's a streak to light it —
+ * a burning icon over a zero is a scolding, and this card is read by people on
+ * day one as often as by people on day forty.
+ */
+function StreakTile({
+  href,
+  label,
+  days,
+  footer,
+}: {
+  href: string;
+  label: string;
+  days: number;
+  footer: string;
+}) {
+  const live = days > 0;
+
+  return (
+    <Link
+      href={href}
+      className="block rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+    >
+      <div
+        className={cn(
+          "press flex h-full items-center gap-3 rounded-lg border p-3 transition-colors active:bg-muted/40",
+          live ? "border-primary/40 bg-primary/[0.05]" : "border-border/60",
+        )}
+      >
+        <Flame
+          className={cn("size-6 shrink-0", live ? "text-primary" : "text-muted-foreground/50")}
+          strokeWidth={live ? 2.2 : 1.8}
+        />
+        <div className="flex min-w-0 flex-col">
+          <span className="font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
+            {label}
+          </span>
+          <span className="font-mono text-2xl font-bold tabular-nums">
+            {days}
+            <span className="ml-1 text-xs font-bold text-muted-foreground">
+              {days === 1 ? "day" : "days"}
+            </span>
+          </span>
+          <span className="truncate text-xs text-muted-foreground">{footer}</span>
+        </div>
+      </div>
+    </Link>
   );
 }

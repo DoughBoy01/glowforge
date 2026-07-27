@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { METRIC_META, scoreDeltaLabel, type TrackedMetric } from "@/lib/metrics";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +24,7 @@ export function MetricCard({
           {meta.label}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="font-mono text-3xl font-bold tabular-nums">{score}</span>
           {delta !== null && (
@@ -39,6 +40,7 @@ export function MetricCard({
             </span>
           )}
         </div>
+        <ScoreLevelBadge score={score} />
       </CardContent>
     </Card>
   );

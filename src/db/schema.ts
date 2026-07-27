@@ -226,6 +226,65 @@ export const skinConcernScores = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// Skin simulations — the goal image. One per scan, produced by chaining the
+// completed analysis into YouCam's AI Skin Simulation: the measured concern
+// scores pick the per-concern intensities (see `@/lib/face-simulation`), and
+// the vendor renders those onto the user's own front photo.
+//
+// `params` stores the exact intensities that were sent, as JSON. That's not
+// debug residue — the UI shows the user which concerns the image is claiming
+// to change, and a stored payload is the only way that caption can't drift
+// from the picture. It also makes a tuning change auditable after the fact:
+// "why does my August image look stronger than my July one" has an answer.
+//
+// `r2Key` mirrors the vendor's output, whose presigned URL dies after 2 hours
+// — the same reason `persistConcernMasks` exists for masks.
+// ---------------------------------------------------------------------------
+export const skinSimulations = sqliteTable(
+  "skin_simulations",
+  {
+    id: id(),
+    scanId: text("scan_id")
+      .notNull()
+      .references(() => scans.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: ["youcam"] })
+      .notNull()
+      .default("youcam"),
+    status: text("status", {
+      enum: ["pending", "processing", "succeeded", "failed", "skipped"],
+    })
+      .notNull()
+      .default("pending"),
+    // What the image is aiming at — a tracked metric, or "overall". Stored so
+    // the caption matches the picture even after the user's priorities shift.
+    goalFocus: text("goal_focus", {
+      enum: ["sun_damage", "firmness", "eye_area", "moisture", "overall"],
+    })
+      .notNull()
+      .default("overall"),
+    goalHorizonWeeks: integer("goal_horizon_weeks").notNull().default(12),
+    params: text("params"), // JSON — { wrinkle: 0.3, spots: 0.2, ... } as sent
+    providerFileId: text("provider_file_id"),
+    providerTaskId: text("provider_task_id"),
+    r2Key: text("r2_key"), // mirrored result image
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    requestedAt: integer("requested_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("skin_simulations_scan_unique_idx").on(t.scanId),
+    index("skin_simulations_user_status_idx").on(t.userId, t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Routines — the fitness-tracker-style habit loop. Steps are the plan,
 // completions are the log entries streaks are computed from.
 // ---------------------------------------------------------------------------
@@ -425,6 +484,12 @@ export const scansRelations = relations(scans, ({ one, many }) => ({
   photos: many(scanPhotos),
   metricScores: many(metricScores),
   analysis: one(skinAnalyses),
+  simulation: one(skinSimulations),
+}));
+
+export const skinSimulationsRelations = relations(skinSimulations, ({ one }) => ({
+  scan: one(scans, { fields: [skinSimulations.scanId], references: [scans.id] }),
+  user: one(users, { fields: [skinSimulations.userId], references: [users.id] }),
 }));
 
 export const scanPhotosRelations = relations(scanPhotos, ({ one }) => ({
