@@ -11,6 +11,7 @@ export type StepCategory =
   | "retinoid"
   | "moisturizer"
   | "treatment"
+  | "shaving"
   | "other";
 
 export type StepKey = "cleanse" | "vitamin_c" | "retinoid" | "eye" | "moisturize" | "spf";

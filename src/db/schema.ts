@@ -334,6 +334,7 @@ export const routineSteps = sqliteTable(
         "retinoid",
         "moisturizer",
         "treatment",
+        "shaving",
         "other",
       ],
     })

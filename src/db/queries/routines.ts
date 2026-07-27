@@ -39,6 +39,7 @@ export async function createRoutine(
           | "retinoid"
           | "moisturizer"
           | "treatment"
+          | "shaving"
           | "other",
       })),
     );

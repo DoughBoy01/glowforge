@@ -43,7 +43,15 @@ import { createRoutineAction } from "./actions";
 
 export const metadata = { title: "Routine" };
 
-const CATEGORIES = ["cleanser", "sunscreen", "retinoid", "moisturizer", "treatment", "other"];
+const CATEGORIES = [
+  "cleanser",
+  "sunscreen",
+  "retinoid",
+  "moisturizer",
+  "treatment",
+  "shaving",
+  "other",
+];
 
 const TIME_LABEL: Record<string, string> = {
   am: "Morning",
