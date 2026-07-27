@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
-import { ArrowRight, ChevronRight, Flame } from "lucide-react";
+import { ArrowRight, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
@@ -11,6 +11,8 @@ import { PartnerTeaser } from "@/components/app/partner-teaser";
 import { AnalysisStatus } from "@/components/app/analysis-status";
 import { CategoryPriorities } from "@/components/app/category-priorities";
 import { ScoreLevelBadge } from "@/components/app/score-level-badge";
+import { SectionHeading } from "@/components/app/section-heading";
+import { StreakTile } from "@/components/app/streak-tile";
 import { TodayHeading } from "@/components/app/today-heading";
 import { TodayBoard } from "@/components/app/today-board";
 import { FaceAgeHero } from "@/components/app/face-age-hero";
@@ -28,7 +30,6 @@ import { buildFaceAgeMission, FACE_AGE_MISSION } from "@/lib/face-age";
 import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildTodayBoard } from "@/lib/home";
 import { formatShortDate, todayLocalDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Home" };
 
@@ -160,7 +161,10 @@ export default async function HomePage() {
   }));
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 md:gap-6">
+    // `stagger` reveals the sections in sequence on arrival rather than
+    // painting the whole stack at once — one orchestrated entrance, nothing
+    // that loops, and inert under prefers-reduced-motion.
+    <div className="stagger mx-auto flex w-full max-w-5xl flex-col gap-4 md:gap-6">
       {/* Two different jobs, so two different headers. A phone gets a dated
           "Today" — the screen answers what to do now, which is not what a
           desktop dashboard is for. Desktop keeps the overview title and the
@@ -168,7 +172,7 @@ export default async function HomePage() {
           at any width; the other is display:none. */}
       <TodayHeading />
       <div className="hidden flex-wrap items-center justify-between gap-4 md:flex">
-        <h1 className="text-2xl font-bold tracking-tight">Overview</h1>
+        <h1 className="text-3xl leading-none">Overview</h1>
         <div className="flex gap-2">
           <Button variant="outline" render={<Link href={`/scans/${latest.id}`}>View results</Link>} />
           <ShareButton scanId={latest.id} />
@@ -187,67 +191,70 @@ export default async function HomePage() {
 
       <TodayBoard board={board} />
 
-      <div className="grid gap-4 md:grid-cols-[auto_1fr]">
-        <Link
-          href={`/scans/${latest.id}`}
-          className="block outline-none rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50"
-        >
-          <Card className="press h-full md:justify-center">
-            <CardContent className="flex flex-col items-center gap-3">
-              <ScoreRing
-                score={overall ?? 0}
-                label={OVERALL_META.label}
-                className="size-40 md:size-35"
-              />
-              <ScoreLevelBadge score={overall ?? 0} />
-              <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
-                <DeltaBadge delta={overallDelta} emptyLabel="Baseline" />
-                {previous && (
-                  <span className="text-muted-foreground">
-                    since {formatShortDate(previous.capturedAt)}
-                  </span>
-                )}
+      <section className="flex flex-col gap-3">
+        <SectionHeading>Diagnostics</SectionHeading>
+        <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+          <Link
+            href={`/scans/${latest.id}`}
+            className="block outline-none rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            <Card className="press h-full md:justify-center">
+              <CardContent className="flex flex-col items-center gap-3">
+                <ScoreRing
+                  score={overall ?? 0}
+                  label={OVERALL_META.label}
+                  className="size-40 md:size-35"
+                />
+                <ScoreLevelBadge score={overall ?? 0} />
+                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+                  <DeltaBadge delta={overallDelta} emptyLabel="Baseline" />
+                  {previous && (
+                    <span className="text-muted-foreground">
+                      since {formatShortDate(previous.capturedAt)}
+                    </span>
+                  )}
+                </div>
+                {/* Says what the ring is *for*, which the number alone doesn't.
+                    These four scores are the diagnosis behind the face age above —
+                    the reason it moved, not a second scoreboard. */}
+                <p className="max-w-[16rem] text-center text-xs text-balance text-muted-foreground">
+                  What&apos;s driving your face age — the four things the scan grades.
+                </p>
+                <span className="flex items-center gap-1 font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
+                  Full results <ChevronRight className="size-3.5" />
+                </span>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Card className="border-border/60">
+            <CardHeader className="flex flex-row items-start justify-between gap-4">
+              <div>
+                <CardTitle>Overall trend</CardTitle>
+                <CardDescription>Last 30 check-ins</CardDescription>
               </div>
-              {/* Says what the ring is *for*, which the number alone doesn't.
-                  These four scores are the diagnosis behind the face age above —
-                  the reason it moved, not a second scoreboard. */}
-              <p className="max-w-[16rem] text-center text-xs text-balance text-muted-foreground">
-                What&apos;s driving your face age — the four things the scan grades.
-              </p>
-              <span className="flex items-center gap-1 font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
-                Full results <ChevronRight className="size-3.5" />
-              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                render={
+                  <Link href="/scans">
+                    <span className="max-sm:sr-only">Full history</span>
+                    <ArrowRight className="size-4" />
+                  </Link>
+                }
+              />
+            </CardHeader>
+            <CardContent>
+              <DeferredTrendChart
+                data={overallTrend.map((row) => ({
+                  date: row.capturedAt,
+                  score: row.score,
+                }))}
+              />
             </CardContent>
           </Card>
-        </Link>
-
-        <Card className="border-border/60">
-          <CardHeader className="flex flex-row items-start justify-between gap-4">
-            <div>
-              <CardTitle>Overall trend</CardTitle>
-              <CardDescription>Last 30 check-ins</CardDescription>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              render={
-                <Link href="/scans">
-                  <span className="max-sm:sr-only">Full history</span>
-                  <ArrowRight className="size-4" />
-                </Link>
-              }
-            />
-          </CardHeader>
-          <CardContent>
-            <DeferredTrendChart
-              data={overallTrend.map((row) => ({
-                date: row.capturedAt,
-                score: row.score,
-              }))}
-            />
-          </CardContent>
-        </Card>
-      </div>
+        </div>
+      </section>
 
       {/* Same card as the results page, same reasoning for keeping it here:
           this is the goal made visible, and a goal worth persisting toward
@@ -263,20 +270,23 @@ export default async function HomePage() {
         />
       )}
 
-      <MetricRail items={metricItems} />
+      <section className="flex flex-col gap-3">
+        <SectionHeading>Breakdown</SectionHeading>
+        <MetricRail items={metricItems} />
+      </section>
 
       <CategoryPriorities priorities={priorities} />
 
       {/* Both daily habits, side by side. Two streaks rather than one because
           they're independent — someone can be word-perfect on skincare and
           have never once opened the gym — and a single "best streak" number
-          would quietly report the better of the two as if it were both. */}
-      <Card className="border-border/60">
-        <CardHeader>
-          <CardTitle>Streaks</CardTitle>
-          <CardDescription>Consecutive days, and what it takes to keep them.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2">
+          would quietly report the better of the two as if it were both.
+
+          Deliberately not wrapped in a card: the two tiles are already
+          bounded panels, and a card around them was a box inside a box. */}
+      <section className="flex flex-col gap-3">
+        <SectionHeading>Streaks</SectionHeading>
+        <div className="grid gap-3 sm:grid-cols-2">
           <StreakTile
             href="/routine"
             label="Routine"
@@ -297,8 +307,8 @@ export default async function HomePage() {
                 : "Never trained"
             }
           />
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <PartnerTeaser links={partnerLinks} />
 
@@ -307,55 +317,5 @@ export default async function HomePage() {
           of the scroll, where the thumb already is. */}
       <ShareButton scanId={latest.id} className="w-full md:hidden" />
     </div>
-  );
-}
-
-/**
- * One habit's streak. The flame only lights once there's a streak to light it —
- * a burning icon over a zero is a scolding, and this card is read by people on
- * day one as often as by people on day forty.
- */
-function StreakTile({
-  href,
-  label,
-  days,
-  footer,
-}: {
-  href: string;
-  label: string;
-  days: number;
-  footer: string;
-}) {
-  const live = days > 0;
-
-  return (
-    <Link
-      href={href}
-      className="block rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-    >
-      <div
-        className={cn(
-          "press flex h-full items-center gap-3 rounded-lg border p-3 transition-colors active:bg-muted/40",
-          live ? "border-primary/40 bg-primary/[0.05]" : "border-border/60",
-        )}
-      >
-        <Flame
-          className={cn("size-6 shrink-0", live ? "text-primary" : "text-muted-foreground/50")}
-          strokeWidth={live ? 2.2 : 1.8}
-        />
-        <div className="flex min-w-0 flex-col">
-          <span className="font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
-            {label}
-          </span>
-          <span className="font-mono text-2xl font-bold tabular-nums">
-            {days}
-            <span className="ml-1 text-xs font-bold text-muted-foreground">
-              {days === 1 ? "day" : "days"}
-            </span>
-          </span>
-          <span className="truncate text-xs text-muted-foreground">{footer}</span>
-        </div>
-      </div>
-    </Link>
   );
 }

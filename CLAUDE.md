@@ -71,6 +71,44 @@ palette's cyan, reserved for "data/trust") instead. Check both light and
 dark mode if you touch these colors — the confusion was only obvious in
 dark mode, which is this app's primary theme.
 
+## The HUD kit — spend the identity, don't re-derive it
+
+The "GlowForge Tactical" identity is fully specified in tokens (four fonts in
+[`layout.tsx`](src/app/layout.tsx), neon magenta/cyan on near-black, CRT
+scanline wash) but screens kept under-spending it: before this, Anton appeared
+in four places app-wide and Yellowtail only in the logo, so the home screen was
+a stack of identical rounded cards that happened to be dark. The reference
+point is Grand Theft Auto — see [`.impeccable.md`](.impeccable.md) for the full
+design context.
+
+[`globals.css`](src/app/globals.css) now carries the kit. Reach for these
+instead of inventing arbitrary values:
+
+| Utility | Use |
+| --- | --- |
+| `display` | Anton italic caps outside `h1`/`h2` (which get it from the base layer). Blocks faux-bold synthesis — Anton is single-weight, so never pair it with `font-bold`. |
+| `hud-notch` | Corner-notched panel. A real `@utility`, so `md:hud-notch` works. |
+| `hud-brackets` | Targeting-bracket corners. |
+| `hud-hazard` | Diagonal hazard tape, for panel edges and rules. |
+| `neon` / `neon-lg` / `neon-accent` | Text glow. **Dark-mode only by design** — a glow on a light ground just reads as blur. |
+| `hud-meter` | Segmented gauge mask. |
+| `stagger` | Sequenced arrival for a section stack (caps at 10 children). |
+| `animate-lock-on` / `animate-sweep` / `animate-meter` | One-shot arrival motion. |
+
+Two rules that are load-bearing:
+
+1. **The one number a screen exists to deliver gets `display`; everything
+   supporting it stays `font-mono`.** Mono is the readout voice — correct for
+   telemetry, wrong for the headline figure. Face age was mono and it's why the
+   hero read as another row of stats.
+2. **Nothing loops.** Motion is an arrival gesture only. A looping sweep or
+   pulse turns a readout into a screensaver, and everything here is inert under
+   `prefers-reduced-motion`.
+
+[`SectionHeading`](src/components/app/section-heading.tsx) is the page-rhythm
+primitive — use it to break a long stack rather than giving every block its own
+`CardTitle`, which is what flattened the home screen in the first place.
+
 ## Recently built (this branch: `face-age-mission`)
 
 - Face age promoted to the primary metric: `FaceAgeHero` (dashboard),

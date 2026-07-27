@@ -345,6 +345,37 @@
   }
 }
 
+/* Corner-notched panel. The cut corners are what stop a stack of these
+   reading as the same rounded rectangle every dashboard uses — one shallow
+   diagonal is enough, so the notch is deliberately small.
+
+   A real `@utility` rather than a class in `@layer utilities`, because that
+   is what buys `md:hud-notch` — Tailwind v4 only generates variants for
+   utilities registered this way. */
+@utility hud-notch {
+  --notch: 0.875rem;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--notch)) 0,
+    100% var(--notch),
+    100% 100%,
+    var(--notch) 100%,
+    0 calc(100% - var(--notch))
+  );
+}
+
+/* Anton, the display face, outside of h1/h2 — which are the only places the
+   base layer styles it. Single-weight, so faux-bold synthesis has to be
+   blocked wherever it lands next to a `font-bold` container. */
+@utility display {
+  font-family: var(--font-anton);
+  font-style: italic;
+  font-weight: 400;
+  font-synthesis: none;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 @layer utilities {
   /* Page-level enter animation. Kept in CSS (rather than a motion library)
      so it costs nothing and runs on the compositor. */
@@ -361,6 +392,153 @@
 
   .animate-page-in {
     animation: gf-page-in 240ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  /* ---------------------------------------------------------------------
+     HUD kit — the "GlowForge Tactical" surface treatments.
+
+     These exist so the identity is spendable as utilities rather than
+     re-derived as arbitrary values on every screen. The house easing is
+     ease-out-expo: fast departure, long settle, no overshoot.
+     ------------------------------------------------------------------ */
+
+  /* Targeting brackets. Drawn with two pseudo-elements (four corners, two
+     boxes) rather than four, and inset so they read as a frame *around*
+     content instead of a second border on it. */
+  .hud-brackets {
+    position: relative;
+  }
+  .hud-brackets::before,
+  .hud-brackets::after {
+    content: "";
+    position: absolute;
+    width: 0.75rem;
+    height: 0.75rem;
+    pointer-events: none;
+    border-color: var(--accent);
+    opacity: 0.55;
+  }
+  .hud-brackets::before {
+    top: 0.5rem;
+    left: 0.5rem;
+    border-top: 1.5px solid;
+    border-left: 1.5px solid;
+  }
+  .hud-brackets::after {
+    right: 0.5rem;
+    bottom: 0.5rem;
+    border-right: 1.5px solid;
+    border-bottom: 1.5px solid;
+  }
+
+  /* Diagonal hazard tape. Used as a rule between sections — carries the
+     angle motif without spending another neon surface. */
+  .hud-hazard {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      var(--primary) 0 2px,
+      transparent 2px 7px
+    );
+    opacity: 0.35;
+  }
+
+  /* Neon. Magenta for "winning / act now", cyan for data — the two are not
+     interchangeable, so they get separate utilities rather than one that
+     takes a colour. No-ops in light mode, where a glow on a white ground
+     just reads as blur. */
+  .dark .neon {
+    text-shadow: 0 0 18px color-mix(in oklab, var(--primary) 55%, transparent);
+  }
+  .dark .neon-lg {
+    text-shadow:
+      0 0 28px color-mix(in oklab, var(--primary) 65%, transparent),
+      0 0 72px color-mix(in oklab, var(--primary) 30%, transparent);
+  }
+  .dark .neon-accent {
+    text-shadow: 0 0 18px color-mix(in oklab, var(--accent) 55%, transparent);
+  }
+
+  /* Segmented meter. Deliberately notched rather than a smooth bar: a
+     continuous fill implies a precision these 0-100 scores don't have, and
+     segments read as a HUD gauge instead of a progress bar. */
+  .hud-meter {
+    --seg: 10;
+    mask-image: repeating-linear-gradient(
+      90deg,
+      #000 0 calc(100% / var(--seg) - 3px),
+      transparent calc(100% / var(--seg) - 3px) calc(100% / var(--seg))
+    );
+  }
+
+  /* ---------------------------------------------------------------------
+     Arrival motion. One orchestrated entrance beats scattered idle
+     animation — nothing here loops.
+     ------------------------------------------------------------------ */
+
+  /* Staggered reveal for a section stack. Depth is capped at 10 because
+     nth-child selectors are the price of not threading an --i inline style
+     through every child; past the tenth the delay would be too long to
+     read as one gesture anyway. */
+  .stagger > * {
+    animation: gf-page-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .stagger > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger > *:nth-child(2) { animation-delay: 55ms; }
+  .stagger > *:nth-child(3) { animation-delay: 110ms; }
+  .stagger > *:nth-child(4) { animation-delay: 165ms; }
+  .stagger > *:nth-child(5) { animation-delay: 220ms; }
+  .stagger > *:nth-child(6) { animation-delay: 275ms; }
+  .stagger > *:nth-child(7) { animation-delay: 330ms; }
+  .stagger > *:nth-child(8) { animation-delay: 385ms; }
+  .stagger > *:nth-child(9) { animation-delay: 440ms; }
+  .stagger > *:nth-child(n + 10) { animation-delay: 495ms; }
+
+  /* The mission number booting up. Scale + blur rather than a JS count-up:
+     the hero is a server component by design, and this reads as a readout
+     locking on without shipping a bundle to animate a number the server
+     already knows. */
+  @keyframes gf-lock-on {
+    from {
+      opacity: 0;
+      transform: scale(1.12);
+      filter: blur(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+  }
+  .animate-lock-on {
+    animation: gf-lock-on 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* One-shot scan sweep across a panel on arrival. Runs once — a looping
+     sweep turns a readout into a screensaver. */
+  @keyframes gf-sweep {
+    from {
+      transform: translateX(-110%);
+    }
+    to {
+      transform: translateX(220%);
+    }
+  }
+  .animate-sweep {
+    animation: gf-sweep 1100ms cubic-bezier(0.16, 1, 0.3, 1) 220ms both;
+  }
+
+  /* Meter segments filling left-to-right. */
+  @keyframes gf-meter-in {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  .animate-meter {
+    transform-origin: left;
+    animation: gf-meter-in 720ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
   }
 
   @keyframes gf-sheet-in {
