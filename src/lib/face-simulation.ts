@@ -289,6 +289,17 @@ export const SIMULATION_DISCLAIMER =
 export const SIMULATION_BADGE = "Simulated";
 
 /**
+ * The line for the projected-face-age readout, a level more speculative than
+ * the image it sits next to: that image is derived from real measurements,
+ * but this number comes from re-analyzing a synthetic photo — a read on the
+ * picture, not a forecast about a real future scan. Keeps the two disclaimers
+ * separate rather than folding this into `SIMULATION_DISCLAIMER` so each can
+ * be precise about what it's disclaiming.
+ */
+export const PREDICTION_DISCLAIMER =
+  "Comes from running the same analysis on this generated image — a read on the picture, not a promise about your next real scan.";
+
+/**
  * One-line summary of what the image is showing, e.g.
  * "Softer texture, clearer skin and less redness". Built from the parameters
  * actually applied, so the sentence can't overclaim relative to the picture.

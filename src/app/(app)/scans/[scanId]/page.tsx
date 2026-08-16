@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { ArrowLeftRight, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,20 +9,26 @@ import { ScoreRing } from "@/components/app/score-ring";
 import { MetricCard } from "@/components/app/metric-card";
 import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { FaceAgeBadge } from "@/components/app/face-age-badge";
+import { PredictionCheck } from "@/components/app/prediction-check";
 import { ShareButton } from "@/components/app/share-button";
 import { AnalysisStatus } from "@/components/app/analysis-status";
 import { ResultsAnalyzing } from "@/components/app/results-analyzing";
 import { TechnicalBreakdown } from "@/components/app/technical-breakdown";
+import { DiagnosticHudScan } from "@/components/app/diagnostic-hud-scan";
 import { ScoreProjection } from "@/components/app/score-projection";
 import { GoalPreview } from "@/components/app/goal-preview";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
+import { PrimeMoveCard } from "@/components/app/prime-move-card";
 import { getDb } from "@/db";
 import { getScanById, getPreviousScan } from "@/db/queries/scans";
 import { getSimulationForScan } from "@/db/queries/skin-simulations";
+import { getPredictionForScan } from "@/db/queries/skin-predictions";
+import { getActivePartnerLinks, partnerLinkForMetric } from "@/db/queries/partners";
 import { TRACKED_METRICS, METRIC_META, OVERALL_META, scoreForMetric, trackedScores } from "@/lib/metrics";
 import { getCategoryPriorities, getProjectedScores, getSkinAgeInsight } from "@/lib/insights";
 import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildDailyRoutines } from "@/lib/daily-routine";
+import { buildPrimeMove } from "@/lib/prime-move";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Results" };
@@ -39,7 +45,10 @@ export default async function ScanResultsPage({
   const scan = await getScanById(db, userId!, scanId);
   if (!scan) notFound();
 
-  const previous = await getPreviousScan(db, userId!, scan.capturedAt);
+  const [previous, partnerLinks] = await Promise.all([
+    getPreviousScan(db, userId!, scan.capturedAt),
+    getActivePartnerLinks(db),
+  ]);
 
   const latestScores = trackedScores(scan.metricScores);
   const previousScores = previous ? trackedScores(previous.metricScores) : null;
@@ -50,6 +59,7 @@ export default async function ScanResultsPage({
   const dailyRoutines = priorities.length
     ? buildDailyRoutines(priorities, scan.analysis?.concernScores ?? [])
     : [];
+  const primeMove = buildPrimeMove(priorities, scan.analysis?.concernScores ?? []);
 
   const frontPhoto = scan.photos.find((p) => p.angle === "front");
 
@@ -70,14 +80,37 @@ export default async function ScanResultsPage({
         )
       : null;
 
+  // Grades the *previous* check-in's goal image against this scan's real
+  // measurement — the reconciliation half of closing the loop. `null` when
+  // there's nothing to grade yet (first-ever scan, or the previous check-in
+  // predates this feature / never got a usable simulation).
+  const predictionCheck =
+    aiSucceeded &&
+    scan.analysis?.skinAge != null &&
+    previous?.prediction?.status === "succeeded" &&
+    previous.prediction.predictedSkinAge != null
+      ? {
+          predictedSkinAge: previous.prediction.predictedSkinAge,
+          actualSkinAge: scan.analysis.skinAge,
+          sourceCapturedAt: previous.capturedAt,
+        }
+      : null;
+
   const concernScores = scan.analysis?.concernScores.map((c) => ({
     concern: c.concern,
     uiScore: c.uiScore,
     hasMask: c.maskUrl != null,
   })) ?? [];
 
-  // The goal image.
+  // Worst-first, capped at 10 — the `.stagger` utility's nth-child delay
+  // table only covers that many children before the last one absorbs the
+  // rest, so past that the "arrival" reads as simultaneous, not staggered.
+  const hudConcerns = concernScores.filter((c) => c.hasMask).sort((a, b) => a.uiScore - b.uiScore).slice(0, 6);
+
+  // The goal image, and the prediction closing the loop on it — this scan's
+  // own, not the previous scan's (that's `predictionCheck`, above).
   const simulation = frontPhoto ? await getSimulationForScan(db, userId!, scan.id) : null;
+  const prediction = frontPhoto ? await getPredictionForScan(db, userId!, scan.id) : null;
   const goalPreview = resolveGoalPreview({
     simulation,
     concernScores: scan.analysis?.concernScores ?? [],
@@ -179,6 +212,7 @@ export default async function ScanResultsPage({
           {/* Above the four metric cards, not fifth in the row with them. This
               is what the check-in was for; those are the reasons behind it. */}
           {skinAgeInsight && <FaceAgeBadge insight={skinAgeInsight} />}
+          {predictionCheck && <PredictionCheck {...predictionCheck} />}
 
           <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
             {TRACKED_METRICS.map((metric) => (
@@ -190,6 +224,24 @@ export default async function ScanResultsPage({
               />
             ))}
           </div>
+
+          {/* Straight after the diagnosis and well before the plan. Anyone who
+              reads the top of this page and leaves should still be walking out
+              with something to buy and something to do — the goal image, the
+              projection and the full routine are all worth more once someone
+              has taken one step, and worth nothing to someone the wall of
+              steps has already lost. */}
+          {primeMove && (
+            <PrimeMoveCard
+              move={primeMove}
+              partner={partnerLinkForMetric(partnerLinks, primeMove.metric)}
+              href={dailyRoutines.length > 0 ? "#daily-routine" : "/routine"}
+            />
+          )}
+
+          {frontPhoto && hudConcerns.length > 0 && (
+            <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
+          )}
 
           {concernScores.length > 0 && (
             <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
@@ -212,6 +264,8 @@ export default async function ScanResultsPage({
               summary={goalPreview.summary}
               params={goalPreview.params}
               horizonWeeks={goalPreview.goal.horizonWeeks}
+              initialPredictionStatus={prediction?.status ?? null}
+              initialPredictedSkinAge={prediction?.predictedSkinAge ?? null}
             />
           )}
 
@@ -231,11 +285,13 @@ export default async function ScanResultsPage({
           )}
 
           {dailyRoutines.length > 0 && (
-            <DailyRoutinePlan
-              routines={dailyRoutines}
-              scanId={scan.id}
-              description="Built from this check-in and ordered the way you actually run it. Save it and we'll track it for you."
-            />
+            <div id="daily-routine" className="scroll-mt-20">
+              <DailyRoutinePlan
+                routines={dailyRoutines}
+                scanId={scan.id}
+                description="The full protocol, ordered the way you actually run it. Start with the one move above if this is more than you want on day one — every step here is built on it."
+              />
+            </div>
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

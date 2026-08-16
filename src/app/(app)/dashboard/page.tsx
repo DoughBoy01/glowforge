@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { ArrowRight, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,18 +17,25 @@ import { TodayHeading } from "@/components/app/today-heading";
 import { TodayBoard } from "@/components/app/today-board";
 import { FaceAgeHero } from "@/components/app/face-age-hero";
 import { GoalPreview } from "@/components/app/goal-preview";
+import { PrimeMoveCard } from "@/components/app/prime-move-card";
+import { PromotionsPanel } from "@/components/app/promotions-panel";
 import { DeltaBadge } from "@/components/app/delta-badge";
 import { getDb } from "@/db";
 import { getRecentScans, getMetricTrend, getFaceAgeReadings, getScanGoalContext } from "@/db/queries/scans";
 import { getSimulationForScan } from "@/db/queries/skin-simulations";
 import { getActiveRoutines, getCompletionsByRoutine, deriveRoutineProgress } from "@/db/queries/routines";
 import { getFaceGymStats } from "@/db/queries/face-gym";
-import { getActivePartnerLinks } from "@/db/queries/partners";
+import {
+  getActivePartnerLinks,
+  getFeaturedPartnerLinks,
+  partnerLinkForMetric,
+} from "@/db/queries/partners";
 import { TRACKED_METRICS, OVERALL_META, scoreForMetric, type MetricType, type TrackedMetric } from "@/lib/metrics";
 import { getCategoryPriorities } from "@/lib/insights";
 import { buildFaceAgeMission, FACE_AGE_MISSION } from "@/lib/face-age";
 import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildTodayBoard } from "@/lib/home";
+import { buildPrimeMove } from "@/lib/prime-move";
 import { formatShortDate, todayLocalDate } from "@/lib/format";
 
 export const metadata = { title: "Home" };
@@ -49,20 +56,29 @@ export default async function HomePage() {
   const db = getDb();
 
   // One parallel batch, and deliberately nothing awaited after it. Every number
-  // on this screen is derivable from these seven reads, so the page's time to
+  // on this screen is derivable from these eight reads, so the page's time to
   // first byte is the slowest single query rather than the sum of two rounds —
   // which is what it was while the routine streaks were fetched per routine,
   // after the routine list they depended on had already come back.
-  const [recentScans, overallTrend, routines, partnerLinks, faceGym, faceAgeReadings, completions] =
-    await Promise.all([
-      getRecentScans(db, userId!, SPARKLINE_SCANS),
-      getMetricTrend(db, userId!, "overall", 30),
-      getActiveRoutines(db, userId!),
-      getActivePartnerLinks(db),
-      getFaceGymStats(db, userId!),
-      getFaceAgeReadings(db, userId!),
-      getCompletionsByRoutine(db, userId!),
-    ]);
+  const [
+    recentScans,
+    overallTrend,
+    routines,
+    partnerLinks,
+    featuredPromotions,
+    faceGym,
+    faceAgeReadings,
+    completions,
+  ] = await Promise.all([
+    getRecentScans(db, userId!, SPARKLINE_SCANS),
+    getMetricTrend(db, userId!, "overall", 30),
+    getActiveRoutines(db, userId!),
+    getActivePartnerLinks(db),
+    getFeaturedPartnerLinks(db),
+    getFaceGymStats(db, userId!),
+    getFaceAgeReadings(db, userId!),
+    getCompletionsByRoutine(db, userId!),
+  ]);
 
   // Pinned once, so every routine on the screen is judged against the same
   // calendar day even if the render straddles midnight.
@@ -104,7 +120,15 @@ export default async function HomePage() {
 
   if (!latest) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-4 py-20 text-center md:py-24">
+      <div className="relative mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 overflow-hidden py-20 text-center md:min-h-0 md:py-24">
+        <video
+          className="pointer-events-none absolute inset-0 -z-10 size-full object-cover opacity-20 motion-reduce:hidden"
+          src="/facescan.mp4"
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+        />
         <h1 className="text-2xl font-bold">Find out your face age</h1>
         <p className="text-sm text-muted-foreground">
           {FACE_AGE_MISSION} One check-in sets the number, and every reading after it is
@@ -148,6 +172,10 @@ export default async function HomePage() {
     ? resolveGoalPreview({ simulation, concernScores: scanGoalContext.concernScores, priorities })
     : null;
 
+  // Same input as the results page's card, so the two never disagree about
+  // what the one move is — it's derived from the latest scan on both.
+  const primeMove = buildPrimeMove(priorities, scanGoalContext.concernScores);
+
   // Oldest-first, so the sparklines read left-to-right like every other
   // chart in the app.
   const chronological = [...recentScans].reverse();
@@ -190,6 +218,22 @@ export default async function HomePage() {
       <FaceAgeHero mission={mission} />
 
       <TodayBoard board={board} />
+
+      {/* Under today's work, above the diagnostics. The board is what to do
+          with what you already own; this is the single thing worth buying,
+          and it stays on the home screen between scans because "go to Boots"
+          is not an errand most people run the same evening they read it. */}
+      {primeMove && (
+        <PrimeMoveCard
+          move={primeMove}
+          partner={partnerLinkForMetric(partnerLinks, primeMove.metric)}
+        />
+      )}
+
+      {/* Right under the prime move — the highest-traffic real estate on the
+          page, so only rows someone deliberately marked `isFeatured` earn a
+          place here rather than every partner row that exists. */}
+      <PromotionsPanel promotions={featuredPromotions} />
 
       <section className="flex flex-col gap-3">
         <SectionHeading>Diagnostics</SectionHeading>

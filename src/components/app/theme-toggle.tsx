@@ -13,9 +13,9 @@ const OPTIONS = [
 ] as const;
 
 /**
- * Segmented appearance control. "System" is the default, so the app tracks
- * the OS the way a native app does; the explicit options are for people who
- * run their phone light but want this dark (or the reverse).
+ * Segmented appearance control. Dark is the app's default regardless of OS
+ * setting, so the identity (neon-on-near-black) is what new users see first;
+ * Light and System are here for anyone who wants to override that.
  */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();

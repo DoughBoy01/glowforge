@@ -82,7 +82,10 @@ export default function RootLayout({
           font-sans at the html level, and CSS custom properties only cascade
           downward — declared on <body> they'd be invisible to that rule.
           No hard-coded `dark` here any more: next-themes writes the class
-          from its blocking script so the OS preference wins on first paint. */}
+          from its blocking script. defaultTheme is "dark" below, so a
+          first-time visitor lands in the app's primary theme regardless of OS
+          preference — Light/System are still there in ThemeToggle for anyone
+          who wants to override it. */}
       <html
         lang="en"
         className={`${inter.variable} ${anton.variable} ${yellowtail.variable} ${robotoMono.variable}`}
@@ -91,7 +94,7 @@ export default function RootLayout({
         <body className="antialiased">
           <ThemeProvider
             attribute="class"
-            defaultTheme="system"
+            defaultTheme="dark"
             enableSystem
             // Also writes `color-scheme` onto <html>, so native form
             // controls, scrollbars and the iOS keyboard match the theme.

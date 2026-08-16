@@ -124,6 +124,23 @@ function levelFor(priorities: CategoryPriority[], metric: TrackedMetric): Priori
 }
 
 /**
+ * Radiance isn't one of the four tracked metrics — it comes straight off the
+ * raw YouCam concern scores — so it has no entry in `getCategoryPriorities`
+ * and needs its own level derivation. Exported because `lib/prime-move`
+ * ranks radiance against the tracked four and the two have to agree on how
+ * bad "bad" is, or the single recommendation and the routine can disagree
+ * about the same scan.
+ */
+export function radianceScore(concernScores: { concern: string; uiScore: number }[]) {
+  return concernScores.find((c) => c.concern === "radiance")?.uiScore;
+}
+
+export function radianceLevelFor(radiance: number | undefined): PriorityLevel {
+  if (radiance === undefined || radiance >= 60) return "on_track";
+  return radiance < 40 ? "critical" : "needs_work";
+}
+
+/**
  * Product picks are attached only where a score says something is actually
  * behind. Someone whose moisture is already excellent doesn't need a
  * moisturizer recommendation — putting an affiliate link there anyway is
@@ -168,10 +185,9 @@ export function buildDailyRoutines(
 
   // Radiance isn't one of the four tracked metrics but is a real male 35+
   // concern, so it comes straight off the raw YouCam concern scores.
-  const radiance = concernScores.find((c) => c.concern === "radiance")?.uiScore;
+  const radiance = radianceScore(concernScores);
   const needsVitaminC = radiance !== undefined && radiance < 70;
-  const radianceLevel: PriorityLevel =
-    radiance === undefined || radiance >= 60 ? "on_track" : radiance < 40 ? "critical" : "needs_work";
+  const radianceLevel = radianceLevelFor(radiance);
 
   const amSteps: DailyStep[] = [
     {

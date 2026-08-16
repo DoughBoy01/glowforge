@@ -47,7 +47,7 @@ export default async function ShareOgImage({ params }: { params: Promise<{ slug:
                 color: "#f0803c",
               }}
             >
-              G
+              S
             </div>
             <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: "#f5f5f0" }}>
               {APP_NAME} progress card

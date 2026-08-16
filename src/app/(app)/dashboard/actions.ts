@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { createShare } from "@/db/queries/shares";
 import { getScanById } from "@/db/queries/scans";

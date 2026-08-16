@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@/db";
 import { users } from "@/db/schema";
 import { generateReferralCode } from "@/lib/referral";
+import { DEV_USER_ID, DEV_USER_EMAIL, isAuthBypassEnabled } from "@/lib/auth";
 import type { User as ClerkUser, UserJSON } from "@clerk/nextjs/server";
 
 type NormalizedClerkUser = {
@@ -140,6 +141,25 @@ export async function setUserSubscription(
 export async function getOrSyncUser(db: Database, clerkUserId: string) {
   const existing = await getUserById(db, clerkUserId);
   if (existing) return existing;
+
+  // Dev auth bypass: the fake user has no Clerk row, so create the D1 row
+  // directly instead of calling the Clerk API for a user that doesn't exist.
+  // onConflictDoNothing keeps this safe when two requests race to create it.
+  if (isAuthBypassEnabled && clerkUserId === DEV_USER_ID) {
+    await db
+      .insert(users)
+      .values({
+        id: DEV_USER_ID,
+        email: DEV_USER_EMAIL,
+        firstName: "Dev",
+        lastName: "User",
+        imageUrl: null,
+        referralCode: generateReferralCode(),
+        referredByCode: null,
+      })
+      .onConflictDoNothing();
+    return getUserById(db, clerkUserId);
+  }
 
   const { clerkClient } = await import("@clerk/nextjs/server");
   const client = await clerkClient();

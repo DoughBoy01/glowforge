@@ -1,7 +1,8 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { getAnalysisForScan } from "@/db/queries/skin-analysis";
 import { getSimulationForScan } from "@/db/queries/skin-simulations";
+import { getPredictionForScan } from "@/db/queries/skin-predictions";
 
 /** Lightweight status poll for the client — never calls YouCam directly (the
  * API key stays server-side; the vendor poll loop runs once, in the
@@ -26,6 +27,9 @@ export async function GET(
   // poll the page is already running rather than adding a second one — the
   // client keeps polling until this settles too.
   const simulation = await getSimulationForScan(db, userId, scanId);
+  // Same reasoning one step further out: the prediction is generated after
+  // the simulation, so it's the last thing to settle.
+  const prediction = await getPredictionForScan(db, userId, scanId);
 
   return Response.json({
     status: analysis.status,
@@ -35,5 +39,7 @@ export async function GET(
     // simulation job hasn't started writing — treated as in-flight by the
     // client, not as absent.
     simulationStatus: simulation?.status ?? null,
+    predictionStatus: prediction?.status ?? null,
+    predictedSkinAge: prediction?.predictedSkinAge ?? null,
   });
 }

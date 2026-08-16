@@ -53,14 +53,12 @@ export function MobileAppBar() {
         ) : (
           <Link
             href="/dashboard"
-            className="press-sm ml-1 flex min-w-0 flex-1 items-center gap-2.5 outline-none"
+            className="press-sm ml-1 flex min-w-0 flex-1 items-center gap-2 font-mono text-lg font-bold tracking-tight outline-none"
           >
-            <span className="flex size-7 -skew-x-6 items-center justify-center bg-primary font-mono text-sm font-bold text-primary-foreground dark:shadow-[2px_2px_0] dark:shadow-accent/50">
-              G
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">
+              S
             </span>
-            <span className="truncate font-script text-2xl text-primary dark:[text-shadow:0_0_14px_rgba(255,46,136,.8),0_0_40px_rgba(255,46,136,.4)]">
-              {APP_NAME}
-            </span>
+            <span className="truncate">{APP_NAME}</span>
           </Link>
         )}
       </div>

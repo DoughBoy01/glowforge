@@ -109,7 +109,7 @@ export function FaceAgeHero({
             <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
               <span
                 className={cn(
-                  "animate-lock-on display block leading-[0.78] tabular-nums",
+                  "animate-glitch-in display block leading-[0.78] tabular-nums",
                   "text-[clamp(5.5rem,26vw,11rem)]",
                   ahead && "neon-lg text-primary",
                 )}

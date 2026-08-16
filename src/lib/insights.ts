@@ -103,6 +103,36 @@ export function getSkinAgeInsight(
   return { skinAge, deltaFromPrevious: delta, message };
 }
 
+export interface PredictionCheckInsight {
+  predictedSkinAge: number;
+  actualSkinAge: number;
+  /** actual - predicted; negative means the real scan beat the projection. */
+  delta: number;
+  message: string;
+}
+
+/**
+ * Grades the previous check-in's goal-image projection against this scan's
+ * real measurement. Deliberately its own function rather than a call to
+ * `getSkinAgeInsight` with the projection in place of "previous" — that
+ * function's copy ("Down N since your last scan — trending younger") is
+ * written for a real scan-over-scan delta, and reusing it here would make a
+ * predicted-vs-actual comparison read as a real mission claim it isn't.
+ */
+export function getPredictionCheckInsight(
+  predictedSkinAge: number,
+  actualSkinAge: number,
+): PredictionCheckInsight {
+  const delta = actualSkinAge - predictedSkinAge;
+  const message =
+    delta === 0
+      ? `Right on target — your last goal image projected ${predictedSkinAge}, and that's what this scan measured.`
+      : delta < 0
+        ? `Beat the projection — your last goal image projected ${predictedSkinAge}; this scan measured ${actualSkinAge}.`
+        : `Came in above the projection — your last goal image projected ${predictedSkinAge}; this scan measured ${actualSkinAge}.`;
+  return { predictedSkinAge, actualSkinAge, delta, message };
+}
+
 export interface ProjectedScore {
   metric: TrackedMetric;
   current: number;

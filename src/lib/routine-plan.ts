@@ -3,11 +3,14 @@ import { getScanById, getLatestScan } from "@/db/queries/scans";
 import { getCategoryPriorities } from "@/lib/insights";
 import { trackedScores } from "@/lib/metrics";
 import { buildDailyRoutines, type DailyRoutine } from "@/lib/daily-routine";
+import { buildPrimeMove, type PrimeMove } from "@/lib/prime-move";
 
 export interface RoutinePlan {
   scanId: string;
   capturedAt: Date;
   routines: DailyRoutine[];
+  /** The one-move version of the same plan, for anyone the full one loses. */
+  primeMove: PrimeMove | null;
 }
 
 /**
@@ -29,13 +32,17 @@ export async function getRoutinePlan(
   const scores = trackedScores(scan.metricScores);
   if (!scores) return null;
 
-  const routines = buildDailyRoutines(
-    getCategoryPriorities(scores),
-    scan.analysis?.concernScores ?? [],
-  );
+  const priorities = getCategoryPriorities(scores);
+  const concernScores = scan.analysis?.concernScores ?? [];
+  const routines = buildDailyRoutines(priorities, concernScores);
   if (routines.length === 0) return null;
 
-  return { scanId: scan.id, capturedAt: scan.capturedAt, routines };
+  return {
+    scanId: scan.id,
+    capturedAt: scan.capturedAt,
+    routines,
+    primeMove: buildPrimeMove(priorities, concernScores),
+  };
 }
 
 /** Flattens a plan into the shape `saveGeneratedRoutines` persists. */

@@ -1,14 +1,15 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getDb } from "@/db";
-import { createScan } from "@/db/queries/scans";
+import { createScan, getLatestScan } from "@/db/queries/scans";
 import { TRACKED_METRICS, type TrackedMetric } from "@/lib/metrics";
 import { captureServerEvent } from "@/lib/analytics/server";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { requestSkinAnalysis } from "@/lib/skin-analysis";
+import { getCheckInEligibility } from "@/lib/home";
 
 const PHOTO_ANGLES = ["front", "left", "right", "eyes_close"] as const;
 
@@ -20,6 +21,15 @@ function clampScore(value: FormDataEntryValue): number {
 export async function submitCheckIn(formData: FormData) {
   const { userId } = await auth();
   if (!userId) redirect("/sign-in");
+
+  const db = getDb();
+
+  // Re-checked here, not just in the page that renders the form: this is the
+  // call that actually spends the AI analysis budget, and a stale client (or
+  // a direct POST) shouldn't be able to skip the cooldown the UI shows.
+  const latestScan = await getLatestScan(db, userId);
+  const eligibility = getCheckInEligibility(latestScan?.capturedAt ?? null);
+  if (!eligibility.eligible) redirect("/check-in");
 
   // Manual scoring is an opt-in toggle in the form — absent fields mean the
   // user left it off and is relying on the AI analysis entirely, so we only
@@ -49,7 +59,6 @@ export async function submitCheckIn(formData: FormData) {
     }
   }
 
-  const db = getDb();
   const { overall } = await createScan(db, {
     id: scanId,
     userId,

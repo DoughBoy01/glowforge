@@ -12,7 +12,7 @@ export function SiteHeader() {
           className="press-sm flex shrink-0 items-center gap-2 font-mono text-lg font-bold tracking-tight"
         >
           <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">
-            G
+            S
           </span>
           {APP_NAME}
         </Link>

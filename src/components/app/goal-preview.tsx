@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { SIMULATION_BADGE, SIMULATION_DISCLAIMER } from "@/lib/face-simulation";
+import { SIMULATION_BADGE, SIMULATION_DISCLAIMER, PREDICTION_DISCLAIMER } from "@/lib/face-simulation";
 import { cn } from "@/lib/utils";
 
 export type SimulationStatus = "pending" | "processing" | "succeeded" | "failed" | "skipped";
@@ -36,6 +36,11 @@ export interface GoalPreviewParam {
  * more of the goal than the baseline — enough to read as "here's where this
  * goes" without hiding what they actually look like.
  */
+/** `null`/pending/processing all mean "not settled yet, keep polling" — mirrors the original single-status guard. */
+function isPending(s: SimulationStatus | null): boolean {
+  return s === null || s === "pending" || s === "processing";
+}
+
 export function GoalPreview({
   scanId,
   status,
@@ -43,6 +48,8 @@ export function GoalPreview({
   summary,
   params,
   horizonWeeks,
+  initialPredictionStatus = null,
+  initialPredictedSkinAge = null,
   className,
 }: {
   scanId: string;
@@ -51,17 +58,23 @@ export function GoalPreview({
   summary: string;
   params: GoalPreviewParam[];
   horizonWeeks: number;
+  initialPredictionStatus?: SimulationStatus | null;
+  initialPredictedSkinAge?: number | null;
   className?: string;
 }) {
   const router = useRouter();
   const [current, setCurrent] = useState(status);
+  const [predictionStatus, setPredictionStatus] = useState(initialPredictionStatus);
+  const [predictedSkinAge, setPredictedSkinAge] = useState(initialPredictedSkinAge);
   const [gaveUp, setGaveUp] = useState(false);
 
-  // The simulation is generated after the analysis lands, so this component
-  // mounts in a pending state and has to wait it out. Shares the analysis
-  // status endpoint rather than adding a second polling loop.
+  // The simulation is generated after the analysis lands, and the prediction
+  // (the same analysis re-run on the simulated image, to grade it) lands
+  // after that — this component mounts in a pending state and has to wait
+  // both out. Shares the analysis status endpoint rather than adding a
+  // second polling loop.
   useEffect(() => {
-    if (current !== null && current !== "pending" && current !== "processing") return;
+    if (!isPending(current) && !isPending(predictionStatus)) return;
 
     let cancelled = false;
     let attempts = 0;
@@ -69,18 +82,30 @@ export function GoalPreview({
       // Two minutes covers the analysis plus a simulation round trip with
       // room to spare. Past that something upstream died without writing a
       // terminal state, and polling a dead job until the tab closes helps
-      // nobody — the card retires instead.
+      // nobody. Only retires the whole card if the goal image itself never
+      // landed — once that's up, a prediction that never arrives just means
+      // no readout, not an empty card.
       if (attempts++ > MAX_POLL_ATTEMPTS) {
-        setGaveUp(true);
+        if (isPending(current)) setGaveUp(true);
         return;
       }
       try {
         const res = await fetch(`/api/scans/${scanId}/analysis`, { cache: "no-store" });
         if (!res.ok || cancelled) return;
-        const data = (await res.json()) as { simulationStatus: SimulationStatus | null };
-        if (cancelled || data.simulationStatus === null) return;
-        setCurrent(data.simulationStatus);
-        if (data.simulationStatus === "succeeded") router.refresh();
+        const data = (await res.json()) as {
+          simulationStatus: SimulationStatus | null;
+          predictionStatus: SimulationStatus | null;
+          predictedSkinAge: number | null;
+        };
+        if (cancelled) return;
+        if (data.simulationStatus !== null) {
+          setCurrent(data.simulationStatus);
+          if (data.simulationStatus === "succeeded") router.refresh();
+        }
+        if (data.predictionStatus !== null) {
+          setPredictionStatus(data.predictionStatus);
+          setPredictedSkinAge(data.predictedSkinAge);
+        }
       } catch {
         // Transient — the next interval retries.
       }
@@ -92,7 +117,7 @@ export function GoalPreview({
       cancelled = true;
       clearInterval(id);
     };
-  }, [current, scanId, router]);
+  }, [current, predictionStatus, scanId, router]);
 
   if (gaveUp) return null;
 
@@ -148,6 +173,15 @@ export function GoalPreview({
           <p className="text-sm text-muted-foreground">
             What ~{horizonWeeks} weeks of consistent routine could plausibly look like.
           </p>
+          {/* Mono, not `display` — this supports the page, it isn't the one
+              number the screen exists to deliver (that's the real face age
+              on the dashboard/results header). */}
+          {predictionStatus === "succeeded" && predictedSkinAge !== null && (
+            <p className="mt-1 font-mono text-xs tracking-wide text-muted-foreground">
+              Projected face age{" "}
+              <span className="font-bold text-foreground tabular-nums">{predictedSkinAge}</span>
+            </p>
+          )}
         </div>
 
         <RevealSlider scanId={scanId} />
@@ -191,6 +225,7 @@ export function GoalPreview({
 
         <p className="text-xs leading-relaxed text-balance text-muted-foreground">
           {SIMULATION_DISCLAIMER}
+          {predictionStatus === "succeeded" && predictedSkinAge !== null && ` ${PREDICTION_DISCLAIMER}`}
         </p>
       </CardContent>
     </Card>

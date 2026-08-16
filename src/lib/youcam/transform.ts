@@ -110,7 +110,7 @@ export function parseTaskResult(raw: YouCamTaskStatusResponse): ParsedAnalysisRe
 }
 
 /**
- * Maps YouCam's raw concerns onto GlowForge's four tracked metrics. Weights
+ * Maps YouCam's raw concerns onto SUHOJA's four tracked metrics. Weights
  * are a deliberate product simplification, not a clinical claim:
  *  - sun_damage leans on pigmentation/photoaging signals — age spots are
  *    the clearest UV marker, wrinkles/redness/radiance are secondary.

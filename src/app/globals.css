@@ -65,7 +65,7 @@
   --tabbar-h: 3.75rem;
   --appbar-h: 3.25rem;
 
-  /* Light mode: kept for system-light users, but GlowForge is dark-first.
+  /* Light mode: kept for system-light users, but SUHOJA is dark-first.
      Brand hues (magenta primary, cyan accent) darkened for light-bg contrast. */
   --background: oklch(0.985 0.002 90);
   --foreground: oklch(0.16 0.01 285);
@@ -104,7 +104,7 @@
 .dark {
   /* Tactical: near-black violet base, neon magenta primary, cyan accent for
      data/trust, amber + signal-green as chart support. Matches the
-     "GlowForge Tactical" design direction. */
+     "SUHOJA Tactical" design direction. */
   --background: #07060D;
   --foreground: #EDE9F7;
   --card: #100C1D;
@@ -196,12 +196,13 @@
        interactive surface below defines its own :active state instead. */
     -webkit-tap-highlight-color: transparent;
     /* Kills the whole-document rubber-band in standalone mode, which
-       otherwise fights the custom pull-to-refresh. */
-    overscroll-behavior-y: none;
+       otherwise fights the custom pull-to-refresh. Both axes: a
+       horizontal-only bounce still reads as "the window is draggable". */
+    overscroll-behavior: none;
   }
 
   body {
-    overscroll-behavior-y: none;
+    overscroll-behavior: none;
   }
 
   /* Skip the 300ms click delay without disabling pinch-zoom (the viewport
@@ -395,7 +396,7 @@
   }
 
   /* ---------------------------------------------------------------------
-     HUD kit — the "GlowForge Tactical" surface treatments.
+     HUD kit — the "SUHOJA Tactical" surface treatments.
 
      These exist so the identity is spendable as utilities rather than
      re-derived as arbitrary values on every screen. The house easing is
@@ -539,6 +540,71 @@
   .animate-meter {
     transform-origin: left;
     animation: gf-meter-in 720ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+  }
+
+  /* One-shot glitch-in for a hero headline or number. Hard cuts (steps, not
+     eased) between a handful of clip-path slices + a red/cyan channel-split
+     text-shadow, settling to the clean glyph — reads as a signal locking on,
+     not a screensaver. Only transform/clip-path/text-shadow move, so it's
+     compositor-cheap, and it never repeats.
+
+     100% deliberately omits text-shadow: with no explicit end value, the
+     animation's implicit target becomes whatever the element's own
+     non-animated style already declares (e.g. .neon-lg's glow, or nothing),
+     so this composes with a neon class instead of clobbering it after the
+     glitch settles. */
+  @keyframes gf-glitch-in {
+    0% {
+      opacity: 0;
+      transform: translate3d(-6px, 0, 0);
+      clip-path: inset(0 0 60% 0);
+      text-shadow:
+        -3px 0 var(--primary),
+        3px 0 var(--accent);
+    }
+    12% {
+      opacity: 1;
+      transform: translate3d(4px, -2px, 0);
+      clip-path: inset(40% 0 20% 0);
+      text-shadow:
+        3px 0 var(--primary),
+        -3px 0 var(--accent);
+    }
+    24% {
+      transform: translate3d(-3px, 1px, 0);
+      clip-path: inset(10% 0 55% 0);
+      text-shadow:
+        -2px 0 var(--accent),
+        2px 0 var(--primary);
+    }
+    36% {
+      transform: translate3d(5px, 0, 0);
+      clip-path: inset(65% 0 5% 0);
+      text-shadow:
+        2px 0 var(--primary),
+        -2px 0 var(--accent);
+    }
+    48% {
+      transform: translate3d(-2px, 0, 0);
+      clip-path: inset(0 0 0 0);
+      text-shadow:
+        -1px 0 var(--accent),
+        1px 0 var(--primary);
+    }
+    64% {
+      transform: none;
+      text-shadow:
+        1px 0 var(--primary),
+        -1px 0 var(--accent);
+    }
+    100% {
+      opacity: 1;
+      transform: none;
+      clip-path: inset(0 0 0 0);
+    }
+  }
+  .animate-glitch-in {
+    animation: gf-glitch-in 640ms steps(1, end) both;
   }
 
   @keyframes gf-sheet-in {

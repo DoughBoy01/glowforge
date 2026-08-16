@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { Flame, Plus, ScanFace } from "lucide-react";
 import {
   Card,
@@ -29,6 +29,9 @@ import {
 } from "@/components/ui/select";
 import { LogCompletionButton } from "@/components/app/log-completion-button";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
+import { PrimeMoveCard } from "@/components/app/prime-move-card";
+import { RoutinePlanTabs } from "@/components/app/routine-plan-tabs";
+import { PromotionsPanel } from "@/components/app/promotions-panel";
 import { SaveRoutineButton } from "@/components/app/save-routine-button";
 import { getDb } from "@/db";
 import {
@@ -36,6 +39,11 @@ import {
   getCompletionsByRoutine,
   deriveRoutineProgress,
 } from "@/db/queries/routines";
+import {
+  getActivePartnerLinks,
+  getFeaturedPartnerLinks,
+  partnerLinkForMetric,
+} from "@/db/queries/partners";
 import { getRoutinePlan } from "@/lib/routine-plan";
 import { FACE_AGE_LABEL } from "@/lib/face-age";
 import { todayLocalDate, formatShortDate } from "@/lib/format";
@@ -66,10 +74,12 @@ export default async function RoutinePage() {
   // routine *after* the routine list arrived — two statements each, in a second
   // serial round trip — which on a phone meant nothing rendered until both hops
   // had finished.
-  const [routines, plan, completions] = await Promise.all([
+  const [routines, plan, completions, partnerLinks, featuredPromotions] = await Promise.all([
     getActiveRoutines(db, userId!),
     getRoutinePlan(db, userId!),
     getCompletionsByRoutine(db, userId!),
+    getActivePartnerLinks(db),
+    getFeaturedPartnerLinks(db),
   ]);
   const today = todayLocalDate();
 
@@ -161,11 +171,25 @@ export default async function RoutinePage() {
           scores, the plan is already written — this page's job is to hand it
           over, not to hand over an empty form. */}
       {routineDetails.length === 0 && plan && (
-        <DailyRoutinePlan
-          routines={plan.routines}
-          scanId={plan.scanId}
-          description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it. Save it and we'll track it for you.`}
-        />
+        plan.primeMove ? (
+          <RoutinePlanTabs
+            primeMove={plan.primeMove}
+            partner={partnerLinkForMetric(partnerLinks, plan.primeMove.metric)}
+            fullRoutine={
+              <DailyRoutinePlan
+                routines={plan.routines}
+                scanId={plan.scanId}
+                description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it. Save it and we'll track it for you.`}
+              />
+            }
+          />
+        ) : (
+          <DailyRoutinePlan
+            routines={plan.routines}
+            scanId={plan.scanId}
+            description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it. Save it and we'll track it for you.`}
+          />
+        )
       )}
 
       {routineDetails.length === 0 && !plan && (
@@ -228,6 +252,16 @@ export default async function RoutinePage() {
           </CardContent>
         </Card>
       ))}
+
+      {/* The one recommended product — visible even with saved routines. */}
+      {routineDetails.length > 0 && plan?.primeMove && (
+        <PrimeMoveCard
+          move={plan.primeMove}
+          partner={partnerLinkForMetric(partnerLinks, plan.primeMove.metric)}
+        />
+      )}
+
+      <PromotionsPanel promotions={featuredPromotions} />
 
       {/* Scores move, so the plan should too. Re-saving rewrites the steps on
           the same routine rows, which is what keeps the streak intact. */}

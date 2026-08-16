@@ -1,4 +1,4 @@
-import { differenceInCalendarDays } from "date-fns";
+import { differenceInCalendarDays, addDays } from "date-fns";
 import type { FaceGymStats } from "@/db/queries/face-gym";
 import { getFaceGymRowLine } from "@/lib/face-gym-coach";
 import type { MissionLink } from "@/lib/face-age";
@@ -17,6 +17,39 @@ import type { MissionLink } from "@/lib/face-age";
  * built around the daily habits instead — see `NAV_ITEMS` and `buildTodayBoard`.
  */
 export const CHECK_IN_INTERVAL_DAYS = 28;
+
+export interface CheckInEligibility {
+  eligible: boolean;
+  /** Set only when ineligible — the calendar date a new scan is allowed. */
+  nextEligibleAt: Date | null;
+  /** Set only when ineligible — always >= 1. */
+  daysRemaining: number;
+}
+
+/**
+ * Gates a new scan to once every `CHECK_IN_INTERVAL_DAYS`. Enforced (not just
+ * advisory copy like `buildTodayBoard`'s "Scan due" row) because each scan
+ * triggers a paid AI analysis call — letting people re-scan daily would let
+ * the API bill scale with impatience instead of with the epidermal turnover
+ * window the cadence is actually built around.
+ */
+export function getCheckInEligibility(
+  lastScanAt: Date | null,
+  now: Date = new Date(),
+): CheckInEligibility {
+  if (!lastScanAt) return { eligible: true, nextEligibleAt: null, daysRemaining: 0 };
+
+  const daysSinceScan = differenceInCalendarDays(now, lastScanAt);
+  if (daysSinceScan >= CHECK_IN_INTERVAL_DAYS) {
+    return { eligible: true, nextEligibleAt: null, daysRemaining: 0 };
+  }
+
+  return {
+    eligible: false,
+    nextEligibleAt: addDays(lastScanAt, CHECK_IN_INTERVAL_DAYS),
+    daysRemaining: CHECK_IN_INTERVAL_DAYS - daysSinceScan,
+  };
+}
 
 export type TodayTaskKind = "check_in" | "build_routine" | "routine" | "face_gym";
 

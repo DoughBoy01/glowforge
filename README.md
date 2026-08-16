@@ -1,4 +1,4 @@
-# GlowForge
+# SUHOJA
 
 Skin performance tracking for men 35+. Sun damage, firmness, eye area, and
 moisture, tracked like a training log — not a beauty app.

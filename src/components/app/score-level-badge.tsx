@@ -29,6 +29,24 @@ const LEVEL_TEXT: Record<PriorityLevel, string> = {
  */
 export function ScoreLevelBadge({ score, className }: { score: number; className?: string }) {
   const { level, label } = scoreLevelLabel(score);
+  return <LevelIndicator level={level} label={label} className={className} />;
+}
+
+/**
+ * The same dot-and-label treatment for callers that already know the level
+ * and want to label it with something other than the tier name — the single
+ * recommendation tags itself with the *category* that chose it ("Firmness"),
+ * in the color of how badly that category scored.
+ */
+export function LevelIndicator({
+  level,
+  label,
+  className,
+}: {
+  level: PriorityLevel;
+  label: string;
+  className?: string;
+}) {
   return (
     <span
       className={cn(

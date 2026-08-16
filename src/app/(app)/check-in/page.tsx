@@ -1,9 +1,39 @@
+import Link from "next/link";
+import { auth } from "@/lib/auth";
+import { Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getDb } from "@/db";
+import { getLatestScan } from "@/db/queries/scans";
 import { FACE_AGE_LABEL } from "@/lib/face-age";
+import { getCheckInEligibility } from "@/lib/home";
+import { formatDate } from "@/lib/format";
 import { CheckInForm } from "./check-in-form";
 
 export const metadata = { title: "Check-in" };
 
-export default function CheckInPage() {
+export default async function CheckInPage() {
+  const { userId } = await auth();
+  const db = getDb();
+  const latestScan = await getLatestScan(db, userId!);
+  const eligibility = getCheckInEligibility(latestScan?.capturedAt ?? null);
+
+  if (!eligibility.eligible) {
+    return (
+      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 py-24 text-center">
+        <Clock className="size-8 text-muted-foreground" />
+        <h1 className="text-2xl font-bold tracking-tight">Not due yet</h1>
+        <p className="text-sm text-muted-foreground">
+          Scans run once every 28 days, so the reading has time to reflect real change instead of
+          lighting or a bad night&apos;s sleep. Your next one opens up on{" "}
+          {formatDate(eligibility.nextEligibleAt!)}
+          {" "}
+          ({eligibility.daysRemaining} day{eligibility.daysRemaining === 1 ? "" : "s"} left).
+        </p>
+        <Button render={<Link href="/">Back to today</Link>} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-2xl">
       <div className="mb-4 flex flex-col gap-1 md:mb-6">

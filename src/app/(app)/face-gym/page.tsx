@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { FaceGymCoachCard } from "@/components/app/face-gym-coach-card";
 import { FaceGymSession } from "@/components/app/face-gym-session";
 import { getDb } from "@/db";

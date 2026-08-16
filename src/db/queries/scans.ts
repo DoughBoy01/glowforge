@@ -254,6 +254,10 @@ export async function getPreviousScan(db: Database, userId: string, beforeCaptur
   return db.query.scans.findFirst({
     where: and(eq(scans.userId, userId), lt(scans.capturedAt, beforeCapturedAt)),
     orderBy: [desc(scans.capturedAt)],
-    with: { metricScores: true, analysis: true },
+    // `prediction` rides along so the results page can reconcile this scan's
+    // real measurement against the previous check-in's goal-image projection
+    // without a second query — see `getPredictionForScan` for the standalone
+    // fetch if a caller ever needs just this.
+    with: { metricScores: true, analysis: true, prediction: true },
   });
 }

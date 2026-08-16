@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Sun, Activity, Eye, Droplet, ArrowRight, TrendingUp, Flame, Share2 } from "lucide-react";
+import { Sun, Activity, Eye, Droplet, ArrowRight, TrendingUp, Flame, Share2, ScanFace } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { IntroVideo } from "@/components/marketing/intro-video";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { METRIC_META } from "@/lib/metrics";
 
@@ -16,14 +15,13 @@ const METRIC_ICONS = {
 export default function LandingPage() {
   return (
     <>
-      <IntroVideo />
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/15 via-background to-background" />
         <div className="mx-auto flex max-w-4xl flex-col items-center px-safe py-20 text-center [--gutter:1rem] md:py-32">
           <span className="mb-6 rounded-full border border-border bg-card px-4 py-1 font-mono text-xs tracking-widest text-muted-foreground uppercase">
             Skin performance tracking for men 35+
           </span>
-          <h1 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl md:text-6xl">
+          <h1 className="animate-glitch-in text-3xl font-bold tracking-tight text-balance sm:text-4xl md:text-6xl">
             {APP_TAGLINE}
           </h1>
           <p className="mt-6 max-w-2xl text-base text-balance text-muted-foreground sm:text-lg">
@@ -85,13 +83,21 @@ export default function LandingPage() {
 
       <section className="py-16 md:py-20">
         <div className="mx-auto max-w-6xl px-safe [--gutter:1rem]">
-          <div className="grid gap-8 md:grid-cols-3">
+          <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             <div className="flex flex-col gap-3">
               <TrendingUp className="size-7 text-accent" strokeWidth={1.75} />
               <h3 className="text-lg font-semibold">Trend, don&apos;t guess</h3>
               <p className="text-sm text-muted-foreground">
                 Every check-in plots against your history. See what&apos;s actually
                 improving and what&apos;s stalled — same as a training log.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              <ScanFace className="size-7 text-accent" strokeWidth={1.75} />
+              <h3 className="text-lg font-semibold">See exactly what it saw</h3>
+              <p className="text-sm text-muted-foreground">
+                Every scan gives you the full concern-by-concern read — wrinkles, pores,
+                redness, and more — not just four headline numbers.
               </p>
             </div>
             <div className="flex flex-col gap-3">

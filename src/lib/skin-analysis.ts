@@ -8,51 +8,12 @@ import {
   getLatestSucceededAnalysis,
 } from "@/db/queries/skin-analysis";
 import { analyzeImage, mapConcernsToTrackedMetrics, type ParsedConcern } from "@/lib/youcam";
-import {
-  YouCamError,
-  YouCamInputError,
-  YouCamRateLimitError,
-  YouCamTaskFailedError,
-  YouCamTimeoutError,
-  describeInputError,
-  isInputErrorCode,
-} from "@/lib/youcam/errors";
+import { YouCamError, describeFailure } from "@/lib/youcam/errors";
 import { captureServerEvent } from "@/lib/analytics/server";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/events";
 import { getSkinAgeInsight } from "@/lib/insights";
 import { runGoalSimulationForScan } from "@/lib/goal-simulation";
-
-/** Maps any thrown error to a stored (code, user-facing message) pair. */
-function describeFailure(err: unknown): { code: string; message: string } {
-  if (err instanceof YouCamInputError) {
-    return { code: err.code, message: describeInputError(err.code) };
-  }
-  if (err instanceof YouCamRateLimitError) {
-    return {
-      code: "rate_limited",
-      message: "Analysis is temporarily busy — we'll retry shortly.",
-    };
-  }
-  if (err instanceof YouCamTaskFailedError) {
-    // Some task-level failures (bad resolution, face too small, ...) are
-    // really input problems surfaced asynchronously — give them the same
-    // friendly, actionable copy as a synchronous input rejection.
-    if (err.code && isInputErrorCode(err.code)) {
-      return { code: err.code, message: describeInputError(err.code) };
-    }
-    return {
-      code: err.code ?? "task_failed",
-      message: "The analysis couldn't be completed for that photo. Try a different one.",
-    };
-  }
-  if (err instanceof YouCamTimeoutError) {
-    return { code: "timeout", message: "Analysis is taking longer than expected. Try again shortly." };
-  }
-  if (err instanceof YouCamError) {
-    return { code: "youcam_error", message: "Analysis failed. Try again shortly." };
-  }
-  return { code: "unknown", message: "Something went wrong analyzing that photo." };
-}
+import { runPredictionForScan } from "@/lib/skin-prediction";
 
 /**
  * YouCam's mask images are presigned S3 URLs that expire in 2 hours — dead
@@ -179,6 +140,12 @@ export async function runSkinAnalysisForScan(params: {
       concernScores: concerns,
       trackedMetrics,
     });
+
+    // Closes the loop: re-analyzes the goal image just generated above, so
+    // the vendor's own analysis grades its own generation. Same reasoning as
+    // the simulation call above for why this is awaited rather than a second
+    // detached promise, and it never throws — see `runPredictionForScan`.
+    await runPredictionForScan({ userId: params.userId, scanId: params.scanId });
   } catch (err) {
     const { code, message } = describeFailure(err);
     // `waitUntil` failures don't surface anywhere else — this is the only

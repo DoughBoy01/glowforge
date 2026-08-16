@@ -1,4 +1,4 @@
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { getDb } from "@/db";
 import { getUserById } from "@/db/queries/users";
 import { getStripe } from "@/lib/stripe";

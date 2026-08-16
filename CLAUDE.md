@@ -73,7 +73,7 @@ dark mode, which is this app's primary theme.
 
 ## The HUD kit — spend the identity, don't re-derive it
 
-The "GlowForge Tactical" identity is fully specified in tokens (four fonts in
+The "SUHOJA Tactical" identity is fully specified in tokens (four fonts in
 [`layout.tsx`](src/app/layout.tsx), neon magenta/cyan on near-black, CRT
 scanline wash) but screens kept under-spending it: before this, Anton appeared
 in four places app-wide and Yellowtail only in the logo, so the home screen was
