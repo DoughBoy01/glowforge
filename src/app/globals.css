@@ -514,6 +514,28 @@
     animation: gf-lock-on 620ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
 
+  /* The lock-on, released — a HUD panel dissolving out rather than an
+     entrance played backwards: ease-in (accelerating away) instead of
+     lock-on's ease-out, and ends past the front edge, not at rest, so it
+     reads as departing. Used for the intro video's exit, where whatever
+     it's covering (e.g. the dashboard) is already mounted underneath and
+     just needs revealing instead of a hard cut. */
+  @keyframes gf-lock-off {
+    from {
+      opacity: 1;
+      transform: none;
+      filter: blur(0);
+    }
+    to {
+      opacity: 0;
+      transform: scale(1.06);
+      filter: blur(16px);
+    }
+  }
+  .animate-lock-off {
+    animation: gf-lock-off 480ms cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
   /* One-shot scan sweep across a panel on arrival. Runs once — a looping
      sweep turns a readout into a screensaver. */
   @keyframes gf-sweep {

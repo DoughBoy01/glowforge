@@ -18,6 +18,7 @@ import { TodayHeading } from "@/components/app/today-heading";
 import { TodayBoard } from "@/components/app/today-board";
 import { FaceAgeHero } from "@/components/app/face-age-hero";
 import { FirstScanPriming } from "@/components/app/first-scan-priming";
+import { IntroVideo } from "@/components/app/intro-video";
 import { GoalPreview } from "@/components/app/goal-preview";
 import { PrimeMoveCard } from "@/components/app/prime-move-card";
 import { PromotionsPanel } from "@/components/app/promotions-panel";
@@ -119,7 +120,12 @@ export default async function HomePage() {
   });
 
   if (!latest) {
-    return <FirstScanPriming />;
+    return (
+      <>
+        <IntroVideo />
+        <FirstScanPriming />
+      </>
+    );
   }
 
   // The goal image panel. A second, dependent round trip rather than folded
@@ -164,178 +170,181 @@ export default async function HomePage() {
   }));
 
   return (
-    // `stagger` reveals the sections in sequence on arrival rather than
-    // painting the whole stack at once — one orchestrated entrance, nothing
-    // that loops, and inert under prefers-reduced-motion.
-    <div className="stagger mx-auto flex w-full max-w-5xl flex-col gap-4 md:gap-6">
-      {/* Two different jobs, so two different headers. A phone gets a dated
-          "Today" — the screen answers what to do now, which is not what a
-          desktop dashboard is for. Desktop keeps the overview title and the
-          action row it has the width for. Exactly one h1 is in the a11y tree
-          at any width; the other is display:none. */}
-      <TodayHeading />
-      <div className="hidden flex-wrap items-center justify-between gap-4 md:flex">
-        <h1 className="text-3xl leading-none">Overview</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" render={<Link href={`/scans/${latest.id}`}>View results</Link>} />
-          {mission.state === "ahead" && <ShareButton scanId={latest.id} />}
-          <Button render={<Link href="/check-in">New check-in</Link>} />
+    <>
+      <IntroVideo />
+      {/* `stagger` reveals the sections in sequence on arrival rather than
+          painting the whole stack at once — one orchestrated entrance, nothing
+          that loops, and inert under prefers-reduced-motion. */}
+      <div className="stagger mx-auto flex w-full max-w-5xl flex-col gap-4 md:gap-6">
+        {/* Two different jobs, so two different headers. A phone gets a dated
+            "Today" — the screen answers what to do now, which is not what a
+            desktop dashboard is for. Desktop keeps the overview title and the
+            action row it has the width for. Exactly one h1 is in the a11y tree
+            at any width; the other is display:none. */}
+        <TodayHeading />
+        <div className="hidden flex-wrap items-center justify-between gap-4 md:flex">
+          <h1 className="text-3xl leading-none">Overview</h1>
+          <div className="flex gap-2">
+            <Button variant="outline" render={<Link href={`/scans/${latest.id}`}>View results</Link>} />
+            {mission.state === "ahead" && <ShareButton scanId={latest.id} />}
+            <Button render={<Link href="/check-in">New check-in</Link>} />
+          </div>
         </div>
-      </div>
 
-      <AnalysisStatus scanId={latest.id} initialStatus={latest.analysis?.status ?? null} />
+        <AnalysisStatus scanId={latest.id} initialStatus={latest.analysis?.status ?? null} />
 
-      {/* The mission first, then the work that feeds it, then the diagnostics.
-          The composite score used to sit here — but a 0-100 number has no
-          natural target, while "fewer years than you started with" does, so the
-          ring moved below the fold to sit with the other measurements it belongs
-          to. */}
-      <FaceAgeHero mission={mission} />
+        {/* The mission first, then the work that feeds it, then the diagnostics.
+            The composite score used to sit here — but a 0-100 number has no
+            natural target, while "fewer years than you started with" does, so the
+            ring moved below the fold to sit with the other measurements it belongs
+            to. */}
+        <FaceAgeHero mission={mission} />
 
-      <TodayBoard board={board} />
+        <TodayBoard board={board} />
 
-      {/* Under today's work, above the diagnostics. The board is what to do
-          with what you already own; this is the single thing worth buying,
-          and it stays on the home screen between scans because "go to Boots"
-          is not an errand most people run the same evening they read it. */}
-      {primeMove && (
-        <PrimeMoveCard
-          move={primeMove}
-          partner={partnerLinkForMetric(partnerLinks, primeMove.metric)}
-        />
-      )}
-
-      {/* Right under the prime move — the highest-traffic real estate on the
-          page, so only rows someone deliberately marked `isFeatured` earn a
-          place here rather than every partner row that exists. */}
-      <PromotionsPanel promotions={featuredPromotions} />
-
-      <section className="flex flex-col gap-3">
-        <SectionHeading>Diagnostics</SectionHeading>
-        <div
-          className={cn(
-            "grid gap-4",
-            previous ? "md:grid-cols-[auto_1fr]" : "md:mx-auto md:max-w-sm",
-          )}
-        >
-          <Link
-            href={`/scans/${latest.id}`}
-            className="block outline-none rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <Card className="press h-full md:justify-center">
-              <CardContent className="flex flex-col items-center gap-3">
-                <ScoreRing
-                  score={overall ?? 0}
-                  label={OVERALL_META.label}
-                  className="size-40 md:size-35"
-                />
-                <ScoreLevelBadge score={overall ?? 0} />
-                <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
-                  <DeltaBadge delta={overallDelta} emptyLabel="Baseline" />
-                  {previous && (
-                    <span className="text-muted-foreground">
-                      since {formatShortDate(previous.capturedAt)}
-                    </span>
-                  )}
-                </div>
-                {/* Says what the ring is *for*, which the number alone doesn't.
-                    These four scores are the diagnosis behind the face age above —
-                    the reason it moved, not a second scoreboard. */}
-                <p className="max-w-[16rem] text-center text-xs text-balance text-muted-foreground">
-                  What&apos;s driving your face age — the four things the scan grades.
-                </p>
-                <span className="flex items-center gap-1 font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
-                  Full results <ChevronRight className="size-3.5" />
-                </span>
-              </CardContent>
-            </Card>
-          </Link>
-
-          {/* Nothing to plot yet on a first scan — the chart's own "log
-              another check-in" fallback is correct but showing that fallback
-              at all is still second-scan chrome on a first-scan visit, so the
-              card is omitted rather than rendered empty. */}
-          {previous && (
-            <Card className="border-border/60">
-              <CardHeader className="flex flex-row items-start justify-between gap-4">
-                <div>
-                  <CardTitle>Overall trend</CardTitle>
-                  <CardDescription>Last 30 check-ins</CardDescription>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  render={
-                    <Link href="/scans">
-                      <span className="max-sm:sr-only">Full history</span>
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  }
-                />
-              </CardHeader>
-              <CardContent>
-                <DeferredTrendChart
-                  data={overallTrend.map((row) => ({
-                    date: row.capturedAt,
-                    score: row.score,
-                  }))}
-                />
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </section>
-
-      {/* Same card as the results page, same reasoning for keeping it here:
-          this is the goal made visible, and a goal worth persisting toward
-          is worth seeing on every visit, not just the day it was scanned. */}
-      {goalPreview && (
-        <GoalPreview
-          scanId={latest.id}
-          status={simulation?.status ?? null}
-          goalLabel={goalLabel(goalPreview.goal)}
-          summary={goalPreview.summary}
-          params={goalPreview.params}
-          horizonWeeks={goalPreview.goal.horizonWeeks}
-        />
-      )}
-
-      <section className="flex flex-col gap-3">
-        <SectionHeading>Breakdown</SectionHeading>
-        <MetricRail items={metricItems} />
-      </section>
-
-      <CategoryPriorities priorities={priorities} />
-
-      {/* Routine dropped from here: streak-gamifying "0 days / no routines
-          yet" pushed a habit loop this audience doesn't form. Face Gym earns
-          the treatment — it's the one daily action logged in-place from the
-          Today board above, not a save/build commitment. */}
-      <section className="flex flex-col gap-3">
-        <SectionHeading>Streak</SectionHeading>
-        <div className="sm:max-w-xs">
-          <StreakTile
-            href="/face-gym"
-            label="Face Gym"
-            days={faceGym.streak}
-            footer={
-              faceGym.totalSessions
-                ? `${faceGym.totalSessions} session${faceGym.totalSessions > 1 ? "s" : ""} · best ${faceGym.bestStreak}d`
-                : "Never trained"
-            }
+        {/* Under today's work, above the diagnostics. The board is what to do
+            with what you already own; this is the single thing worth buying,
+            and it stays on the home screen between scans because "go to Boots"
+            is not an errand most people run the same evening they read it. */}
+        {primeMove && (
+          <PrimeMoveCard
+            move={primeMove}
+            partner={partnerLinkForMetric(partnerLinks, primeMove.metric)}
           />
-        </div>
-      </section>
+        )}
 
-      <PartnerTeaser links={partnerLinks} />
+        {/* Right under the prime move — the highest-traffic real estate on the
+            page, so only rows someone deliberately marked `isFeatured` earn a
+            place here rather than every partner row that exists. */}
+        <PromotionsPanel promotions={featuredPromotions} />
 
-      {/* The board at the top owns check-in and the hero opens the full
-          results, so sharing is the one action left worth a button at the end
-          of the scroll, where the thumb already is. Only once there's
-          something worth sharing — see the header's ShareButton above. */}
-      {mission.state === "ahead" && (
-        <ShareButton scanId={latest.id} className="w-full md:hidden" />
-      )}
-    </div>
+        <section className="flex flex-col gap-3">
+          <SectionHeading>Diagnostics</SectionHeading>
+          <div
+            className={cn(
+              "grid gap-4",
+              previous ? "md:grid-cols-[auto_1fr]" : "md:mx-auto md:max-w-sm",
+            )}
+          >
+            <Link
+              href={`/scans/${latest.id}`}
+              className="block outline-none rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <Card className="press h-full md:justify-center">
+                <CardContent className="flex flex-col items-center gap-3">
+                  <ScoreRing
+                    score={overall ?? 0}
+                    label={OVERALL_META.label}
+                    className="size-40 md:size-35"
+                  />
+                  <ScoreLevelBadge score={overall ?? 0} />
+                  <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm">
+                    <DeltaBadge delta={overallDelta} emptyLabel="Baseline" />
+                    {previous && (
+                      <span className="text-muted-foreground">
+                        since {formatShortDate(previous.capturedAt)}
+                      </span>
+                    )}
+                  </div>
+                  {/* Says what the ring is *for*, which the number alone doesn't.
+                      These four scores are the diagnosis behind the face age above —
+                      the reason it moved, not a second scoreboard. */}
+                  <p className="max-w-[16rem] text-center text-xs text-balance text-muted-foreground">
+                    What&apos;s driving your face age — the four things the scan grades.
+                  </p>
+                  <span className="flex items-center gap-1 font-mono text-[0.625rem] font-bold tracking-[0.16em] text-muted-foreground uppercase">
+                    Full results <ChevronRight className="size-3.5" />
+                  </span>
+                </CardContent>
+              </Card>
+            </Link>
+
+            {/* Nothing to plot yet on a first scan — the chart's own "log
+                another check-in" fallback is correct but showing that fallback
+                at all is still second-scan chrome on a first-scan visit, so the
+                card is omitted rather than rendered empty. */}
+            {previous && (
+              <Card className="border-border/60">
+                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Overall trend</CardTitle>
+                    <CardDescription>Last 30 check-ins</CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    render={
+                      <Link href="/scans">
+                        <span className="max-sm:sr-only">Full history</span>
+                        <ArrowRight className="size-4" />
+                      </Link>
+                    }
+                  />
+                </CardHeader>
+                <CardContent>
+                  <DeferredTrendChart
+                    data={overallTrend.map((row) => ({
+                      date: row.capturedAt,
+                      score: row.score,
+                    }))}
+                  />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </section>
+
+        {/* Same card as the results page, same reasoning for keeping it here:
+            this is the goal made visible, and a goal worth persisting toward
+            is worth seeing on every visit, not just the day it was scanned. */}
+        {goalPreview && (
+          <GoalPreview
+            scanId={latest.id}
+            status={simulation?.status ?? null}
+            goalLabel={goalLabel(goalPreview.goal)}
+            summary={goalPreview.summary}
+            params={goalPreview.params}
+            horizonWeeks={goalPreview.goal.horizonWeeks}
+          />
+        )}
+
+        <section className="flex flex-col gap-3">
+          <SectionHeading>Breakdown</SectionHeading>
+          <MetricRail items={metricItems} />
+        </section>
+
+        <CategoryPriorities priorities={priorities} />
+
+        {/* Routine dropped from here: streak-gamifying "0 days / no routines
+            yet" pushed a habit loop this audience doesn't form. Face Gym earns
+            the treatment — it's the one daily action logged in-place from the
+            Today board above, not a save/build commitment. */}
+        <section className="flex flex-col gap-3">
+          <SectionHeading>Streak</SectionHeading>
+          <div className="sm:max-w-xs">
+            <StreakTile
+              href="/face-gym"
+              label="Face Gym"
+              days={faceGym.streak}
+              footer={
+                faceGym.totalSessions
+                  ? `${faceGym.totalSessions} session${faceGym.totalSessions > 1 ? "s" : ""} · best ${faceGym.bestStreak}d`
+                  : "Never trained"
+              }
+            />
+          </div>
+        </section>
+
+        <PartnerTeaser links={partnerLinks} />
+
+        {/* The board at the top owns check-in and the hero opens the full
+            results, so sharing is the one action left worth a button at the end
+            of the scroll, where the thumb already is. Only once there's
+            something worth sharing — see the header's ShareButton above. */}
+        {mission.state === "ahead" && (
+          <ShareButton scanId={latest.id} className="w-full md:hidden" />
+        )}
+      </div>
+    </>
   );
 }
