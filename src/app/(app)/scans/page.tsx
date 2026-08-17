@@ -9,6 +9,7 @@ import { ConcernTrends } from "@/components/app/concern-trends";
 import { ScanTimeline } from "@/components/app/scan-timeline";
 import { DeltaBadge } from "@/components/app/delta-badge";
 import { ScoreLevelBadge } from "@/components/app/score-level-badge";
+import { ProgressFirstScan } from "@/components/app/progress-first-scan";
 import { getDb } from "@/db";
 import { getScanHistory, countScans, getConcernScoresForScans } from "@/db/queries/scans";
 import {
@@ -17,7 +18,13 @@ import {
   buildFaceAgeSeries,
   buildConcernTrends,
 } from "@/lib/progress";
-import { FACE_AGE_LABEL, FACE_AGE_MISSION } from "@/lib/face-age";
+import {
+  FACE_AGE_LABEL,
+  FACE_AGE_MISSION,
+  FACE_AGE_METHODOLOGY,
+  buildFaceAgeMission,
+} from "@/lib/face-age";
+import { getCheckInEligibility } from "@/lib/home";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Progress" };
@@ -69,6 +76,30 @@ export default async function ProgressPage({
           }
         />
       </div>
+    );
+  }
+
+  if (totalScans === 1) {
+    const reading = history[0];
+    const mission = buildFaceAgeMission(
+      buildFaceAgeSeries(history).map((p) => ({
+        scanId: p.scanId,
+        capturedAt: p.date,
+        faceAge: p.score,
+      })),
+    );
+    const eligibility = getCheckInEligibility({
+      lastScanAt: reading.capturedAt,
+      lastScanFailed: reading.analysis?.status === "failed",
+    });
+
+    return (
+      <ProgressFirstScan
+        scanId={reading.id}
+        capturedAt={reading.capturedAt}
+        mission={mission}
+        eligibility={eligibility}
+      />
     );
   }
 
@@ -126,8 +157,8 @@ export default async function ProgressPage({
           <CardHeader>
             <CardTitle>{FACE_AGE_LABEL}</CardTitle>
             <CardDescription>
-              {FACE_AGE_MISSION} Estimated from each analysed photo and only ever compared
-              against your own history — never against your real age, which we don&apos;t ask for.
+              {FACE_AGE_MISSION} {FACE_AGE_METHODOLOGY} Compared only against your own history —
+              never your real age, which we don&apos;t ask for.
             </CardDescription>
           </CardHeader>
           <CardContent>

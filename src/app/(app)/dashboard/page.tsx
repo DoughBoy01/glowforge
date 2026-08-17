@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { ArrowRight, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
@@ -16,6 +17,7 @@ import { StreakTile } from "@/components/app/streak-tile";
 import { TodayHeading } from "@/components/app/today-heading";
 import { TodayBoard } from "@/components/app/today-board";
 import { FaceAgeHero } from "@/components/app/face-age-hero";
+import { FirstScanPriming } from "@/components/app/first-scan-priming";
 import { GoalPreview } from "@/components/app/goal-preview";
 import { PrimeMoveCard } from "@/components/app/prime-move-card";
 import { PromotionsPanel } from "@/components/app/promotions-panel";
@@ -32,7 +34,7 @@ import {
 } from "@/db/queries/partners";
 import { TRACKED_METRICS, OVERALL_META, scoreForMetric, type MetricType, type TrackedMetric } from "@/lib/metrics";
 import { getCategoryPriorities } from "@/lib/insights";
-import { buildFaceAgeMission, FACE_AGE_MISSION } from "@/lib/face-age";
+import { buildFaceAgeMission } from "@/lib/face-age";
 import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildTodayBoard } from "@/lib/home";
 import { buildPrimeMove } from "@/lib/prime-move";
@@ -89,9 +91,6 @@ export default async function HomePage() {
     routines.map((r) => [r.id, deriveRoutineProgress(completions, r.id, today)]),
   );
   const completedToday = routines.filter((r) => progress.get(r.id)!.doneToday).map((r) => r.id);
-  const bestStreak = routines.length
-    ? Math.max(...routines.map((r) => progress.get(r.id)!.streak))
-    : 0;
 
   const mission = buildFaceAgeMission(faceAgeReadings);
 
@@ -113,38 +112,14 @@ export default async function HomePage() {
 
   const board = buildTodayBoard({
     lastScanAt: latest?.capturedAt ?? null,
+    lastScanFailed: latest?.analysis?.status === "failed",
     routines,
     completedRoutineIds: completedToday,
     faceGym,
   });
 
   if (!latest) {
-    return (
-      <div className="relative mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-4 overflow-hidden py-20 text-center md:min-h-0 md:py-24">
-        <video
-          className="pointer-events-none absolute inset-0 -z-10 size-full object-cover opacity-20 motion-reduce:hidden"
-          src="/facescan.mp4"
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-        />
-        <h1 className="text-2xl font-bold">Find out your face age</h1>
-        <p className="text-sm text-muted-foreground">
-          {FACE_AGE_MISSION} One check-in sets the number, and every reading after it is
-          measured against that first one. Takes under two minutes.
-        </p>
-        <Button
-          size="lg"
-          className="w-full sm:w-auto"
-          render={
-            <Link href="/check-in">
-              Start check-in <ArrowRight className="size-4" />
-            </Link>
-          }
-        />
-      </div>
-    );
+    return <FirstScanPriming />;
   }
 
   // The goal image panel. A second, dependent round trip rather than folded
@@ -203,7 +178,7 @@ export default async function HomePage() {
         <h1 className="text-3xl leading-none">Overview</h1>
         <div className="flex gap-2">
           <Button variant="outline" render={<Link href={`/scans/${latest.id}`}>View results</Link>} />
-          <ShareButton scanId={latest.id} />
+          {mission.state === "ahead" && <ShareButton scanId={latest.id} />}
           <Button render={<Link href="/check-in">New check-in</Link>} />
         </div>
       </div>
@@ -237,7 +212,12 @@ export default async function HomePage() {
 
       <section className="flex flex-col gap-3">
         <SectionHeading>Diagnostics</SectionHeading>
-        <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+        <div
+          className={cn(
+            "grid gap-4",
+            previous ? "md:grid-cols-[auto_1fr]" : "md:mx-auto md:max-w-sm",
+          )}
+        >
           <Link
             href={`/scans/${latest.id}`}
             className="block outline-none rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -271,32 +251,38 @@ export default async function HomePage() {
             </Card>
           </Link>
 
-          <Card className="border-border/60">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div>
-                <CardTitle>Overall trend</CardTitle>
-                <CardDescription>Last 30 check-ins</CardDescription>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                render={
-                  <Link href="/scans">
-                    <span className="max-sm:sr-only">Full history</span>
-                    <ArrowRight className="size-4" />
-                  </Link>
-                }
-              />
-            </CardHeader>
-            <CardContent>
-              <DeferredTrendChart
-                data={overallTrend.map((row) => ({
-                  date: row.capturedAt,
-                  score: row.score,
-                }))}
-              />
-            </CardContent>
-          </Card>
+          {/* Nothing to plot yet on a first scan — the chart's own "log
+              another check-in" fallback is correct but showing that fallback
+              at all is still second-scan chrome on a first-scan visit, so the
+              card is omitted rather than rendered empty. */}
+          {previous && (
+            <Card className="border-border/60">
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <CardTitle>Overall trend</CardTitle>
+                  <CardDescription>Last 30 check-ins</CardDescription>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  render={
+                    <Link href="/scans">
+                      <span className="max-sm:sr-only">Full history</span>
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  }
+                />
+              </CardHeader>
+              <CardContent>
+                <DeferredTrendChart
+                  data={overallTrend.map((row) => ({
+                    date: row.capturedAt,
+                    score: row.score,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
       </section>
 
@@ -321,26 +307,13 @@ export default async function HomePage() {
 
       <CategoryPriorities priorities={priorities} />
 
-      {/* Both daily habits, side by side. Two streaks rather than one because
-          they're independent — someone can be word-perfect on skincare and
-          have never once opened the gym — and a single "best streak" number
-          would quietly report the better of the two as if it were both.
-
-          Deliberately not wrapped in a card: the two tiles are already
-          bounded panels, and a card around them was a box inside a box. */}
+      {/* Routine dropped from here: streak-gamifying "0 days / no routines
+          yet" pushed a habit loop this audience doesn't form. Face Gym earns
+          the treatment — it's the one daily action logged in-place from the
+          Today board above, not a save/build commitment. */}
       <section className="flex flex-col gap-3">
-        <SectionHeading>Streaks</SectionHeading>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <StreakTile
-            href="/routine"
-            label="Routine"
-            days={bestStreak}
-            footer={
-              routines.length
-                ? `${routines.length} active routine${routines.length > 1 ? "s" : ""}`
-                : "No routines yet"
-            }
-          />
+        <SectionHeading>Streak</SectionHeading>
+        <div className="sm:max-w-xs">
           <StreakTile
             href="/face-gym"
             label="Face Gym"
@@ -358,8 +331,11 @@ export default async function HomePage() {
 
       {/* The board at the top owns check-in and the hero opens the full
           results, so sharing is the one action left worth a button at the end
-          of the scroll, where the thumb already is. */}
-      <ShareButton scanId={latest.id} className="w-full md:hidden" />
+          of the scroll, where the thumb already is. Only once there's
+          something worth sharing — see the header's ShareButton above. */}
+      {mission.state === "ahead" && (
+        <ShareButton scanId={latest.id} className="w-full md:hidden" />
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FACE_AGE_LABEL, years } from "@/lib/face-age";
+import { FACE_AGE_LABEL, FACE_AGE_METHODOLOGY, years } from "@/lib/face-age";
 import { cn } from "@/lib/utils";
 import type { SkinAgeInsight } from "@/lib/insights";
 
@@ -54,6 +54,7 @@ export function FaceAgeBadge({ insight }: { insight: SkinAgeInsight }) {
             ? "Your baseline — everything after this is measured against it."
             : "vs. your previous check-in"}
         </span>
+        <span className="text-xs text-muted-foreground/70">{FACE_AGE_METHODOLOGY}</span>
       </CardContent>
     </Card>
   );

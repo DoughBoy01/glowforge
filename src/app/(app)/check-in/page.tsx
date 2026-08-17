@@ -15,7 +15,10 @@ export default async function CheckInPage() {
   const { userId } = await auth();
   const db = getDb();
   const latestScan = await getLatestScan(db, userId!);
-  const eligibility = getCheckInEligibility(latestScan?.capturedAt ?? null);
+  const eligibility = getCheckInEligibility({
+    lastScanAt: latestScan?.capturedAt ?? null,
+    lastScanFailed: latestScan?.analysis?.status === "failed",
+  });
 
   if (!eligibility.eligible) {
     return (

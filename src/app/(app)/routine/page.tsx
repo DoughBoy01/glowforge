@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { auth } from "@/lib/auth";
-import { Flame, Plus, ScanFace } from "lucide-react";
+import { Plus, ScanFace } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -179,7 +179,7 @@ export default async function RoutinePage() {
               <DailyRoutinePlan
                 routines={plan.routines}
                 scanId={plan.scanId}
-                description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it. Save it and we'll track it for you.`}
+                description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it.`}
               />
             }
           />
@@ -187,7 +187,7 @@ export default async function RoutinePage() {
           <DailyRoutinePlan
             routines={plan.routines}
             scanId={plan.scanId}
-            description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it. Save it and we'll track it for you.`}
+            description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it.`}
           />
         )
       )}
@@ -206,7 +206,7 @@ export default async function RoutinePage() {
         </Card>
       )}
 
-      {routineDetails.map(({ routine, streak, doneToday }) => (
+      {routineDetails.map(({ routine, doneToday }) => (
         <Card key={routine.id} className="border-border/60">
           <CardHeader className="flex flex-row items-start justify-between gap-3">
             <div className="min-w-0">
@@ -216,9 +216,6 @@ export default async function RoutinePage() {
                 {routine.source === "generated" && (
                   <Badge variant="outline">Built for you</Badge>
                 )}
-                <span className="flex items-center gap-1 font-mono text-xs">
-                  <Flame className="size-3.5 text-primary" /> {streak} day streak
-                </span>
               </CardDescription>
             </div>
             {/* On a phone the day's one action belongs at the bottom of the

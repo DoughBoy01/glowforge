@@ -89,7 +89,7 @@ export function CheckInForm() {
           disabled={isPending || isResizing}
           onClick={() => haptic("impact")}
         >
-          {isPending ? "Uploading…" : isResizing ? "Preparing photo…" : "Analyze my skin"}
+          {isPending ? "Uploading…" : isResizing ? "Preparing photo…" : "Analyze my face"}
         </Button>
       </div>
     </form>

@@ -62,7 +62,7 @@ export function SaveRoutineButton({
           }
           haptic("success");
           setSaved(true);
-          toast.success("Routine saved. Log it tonight to start the streak.");
+          toast.success("Routine saved.");
         })
       }
     >

@@ -9,7 +9,6 @@ import {
   ListChecks,
   Loader2,
   ScanFace,
-  Sparkles,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,7 +20,6 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<TodayTaskKind, LucideIcon> = {
   check_in: ScanFace,
-  build_routine: Sparkles,
   routine: ListChecks,
   face_gym: Dumbbell,
 };

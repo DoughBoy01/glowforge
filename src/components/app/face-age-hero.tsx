@@ -3,6 +3,7 @@ import { ChevronRight, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   FACE_AGE_LABEL,
+  FACE_AGE_METHODOLOGY,
   getMissionLine,
   years,
   type FaceAgeMission,
@@ -141,6 +142,9 @@ export function FaceAgeHero({
             </div>
 
             <p className="max-w-[52ch] text-sm text-balance text-muted-foreground">{body}</p>
+            <p className="max-w-[52ch] text-xs text-balance text-muted-foreground/70">
+              {FACE_AGE_METHODOLOGY}
+            </p>
           </div>
 
           {/* Baseline and record, the two numbers that give the big one a

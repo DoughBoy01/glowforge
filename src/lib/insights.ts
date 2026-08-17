@@ -12,18 +12,23 @@ export interface CategoryPriority {
   delta: number | null;
 }
 
+// Labels describe absolute standing on the 0-100 scale, never a trajectory —
+// "On track" used to sit here and implied a journey a first-ever baseline
+// reading hasn't had yet ("72 — On Track — Baseline" read as a
+// contradiction). Guidance text avoids presupposing an existing routine too,
+// for the same reason `home.ts` stopped pushing routine-building as a task.
 const LEVEL_COPY: Record<PriorityLevel, { label: string; guidance: string }> = {
   critical: {
     label: "Critical",
-    guidance: "Your lowest-scoring category — prioritize this in your routine.",
+    guidance: "Your lowest-scoring category — prioritize this first.",
   },
   needs_work: {
     label: "Needs work",
-    guidance: "Below where it should be. Worth a dedicated routine step.",
+    guidance: "Below where it should be — worth extra attention.",
   },
   on_track: {
-    label: "On track",
-    guidance: "Solid and stable — keep the current routine going.",
+    label: "Solid",
+    guidance: "Comfortably in range. Nothing urgent here.",
   },
   excellent: {
     label: "Excellent",
@@ -38,6 +43,11 @@ export function levelForScore(score: number): PriorityLevel {
   return "excellent";
 }
 
+/** The canonical label for a tier — the one place this copy is allowed to live. */
+export function labelForLevel(level: PriorityLevel): string {
+  return LEVEL_COPY[level].label;
+}
+
 /**
  * The qualitative read on a bare 0-100 score, for any screen that shows one
  * without the surrounding context `getCategoryPriorities` builds. Every
@@ -46,7 +56,7 @@ export function levelForScore(score: number): PriorityLevel {
  */
 export function scoreLevelLabel(score: number): { level: PriorityLevel; label: string } {
   const level = levelForScore(score);
-  return { level, label: LEVEL_COPY[level].label };
+  return { level, label: labelForLevel(level) };
 }
 
 /**

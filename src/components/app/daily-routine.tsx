@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { ProductLink } from "@/components/app/product-link";
 import { SaveRoutineButton } from "@/components/app/save-routine-button";
 import { ROUTINE_RULES, type DailyRoutine, type RoutineSlot } from "@/lib/daily-routine";
-import type { PriorityLevel } from "@/lib/insights";
+import { labelForLevel, type PriorityLevel } from "@/lib/insights";
 
 const SLOT_ICON: Record<RoutineSlot, typeof Sunrise> = {
   am: Sunrise,
@@ -16,13 +16,6 @@ const LEVEL_VARIANT: Record<PriorityLevel, "destructive" | "secondary" | "outlin
   needs_work: "secondary",
   on_track: "outline",
   excellent: "outline",
-};
-
-const LEVEL_LABEL: Record<PriorityLevel, string> = {
-  critical: "Critical",
-  needs_work: "Needs work",
-  on_track: "On track",
-  excellent: "Maintain",
 };
 
 /**
@@ -91,7 +84,7 @@ export function DailyRoutinePlan({
                       )}
                       {step.level && (
                         <Badge variant={LEVEL_VARIANT[step.level]} className="text-[10px]">
-                          {LEVEL_LABEL[step.level]}
+                          {labelForLevel(step.level)}
                         </Badge>
                       )}
                     </div>

@@ -11,9 +11,14 @@ import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { ScanComparePicker } from "@/components/app/scan-compare-picker";
 import { ShareButton } from "@/components/app/share-button";
 import { getDb } from "@/db";
-import { getScanHistory, getScanById, getConcernScoresForScans } from "@/db/queries/scans";
+import {
+  getScanHistory,
+  getScanById,
+  getConcernScoresForScans,
+  getFaceAgeReadings,
+} from "@/db/queries/scans";
 import { compareScans, compareConcerns } from "@/lib/progress";
-import { FACE_AGE_LABEL } from "@/lib/face-age";
+import { FACE_AGE_LABEL, buildFaceAgeMission } from "@/lib/face-age";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Compare check-ins" };
@@ -29,9 +34,10 @@ export default async function CompareScansPage({
   const { userId } = await auth();
   const db = getDb();
 
-  const [{ from: fromParam, to: toParam }, history] = await Promise.all([
+  const [{ from: fromParam, to: toParam }, history, faceAgeReadings] = await Promise.all([
     searchParams,
     getScanHistory(db, userId!, { limit: PICKER_LIMIT }),
+    getFaceAgeReadings(db, userId!),
   ]);
 
   if (history.length < 2) {
@@ -75,6 +81,12 @@ export default async function CompareScansPage({
   // "delta" always reads as later-minus-earlier.
   const [earlier, later] =
     from.capturedAt <= to.capturedAt ? [from, to] : [to, from];
+
+  // As-of-`later` mission state, same rule as the results page: Share only
+  // once the mission was "ahead" by the date of the later scan in view.
+  const missionAsOfLater = buildFaceAgeMission(
+    faceAgeReadings.filter((r) => r.capturedAt <= later.capturedAt),
+  );
 
   const concernRows = await getConcernScoresForScans(db, userId!, [earlier.id, later.id]);
 
@@ -185,12 +197,14 @@ export default async function CompareScansPage({
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <ShareButton
-          scanId={later.id}
-          compareScanId={earlier.id}
-          label="Share progress"
-          className="w-full sm:w-auto"
-        />
+        {missionAsOfLater.state === "ahead" && (
+          <ShareButton
+            scanId={later.id}
+            compareScanId={earlier.id}
+            label="Share progress"
+            className="w-full sm:w-auto"
+          />
+        )}
         <Button
           variant="outline"
           className="w-full sm:w-auto"

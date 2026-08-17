@@ -32,12 +32,25 @@ export interface CheckInEligibility {
  * triggers a paid AI analysis call — letting people re-scan daily would let
  * the API bill scale with impatience instead of with the epidermal turnover
  * window the cadence is actually built around.
+ *
+ * A scan whose analysis failed produced no usable result, so it shouldn't
+ * spend the cooldown — `lastScanFailed: true` is treated the same as no scan
+ * at all. Without this, the "Try another check-in" retry on the results
+ * page's failure card (see `scans/[scanId]/page.tsx`) leads straight back
+ * into a 28-day wall for a photo that was never scored.
  */
-export function getCheckInEligibility(
-  lastScanAt: Date | null,
-  now: Date = new Date(),
-): CheckInEligibility {
-  if (!lastScanAt) return { eligible: true, nextEligibleAt: null, daysRemaining: 0 };
+export function getCheckInEligibility({
+  lastScanAt,
+  lastScanFailed = false,
+  now = new Date(),
+}: {
+  lastScanAt: Date | null;
+  lastScanFailed?: boolean;
+  now?: Date;
+}): CheckInEligibility {
+  if (!lastScanAt || lastScanFailed) {
+    return { eligible: true, nextEligibleAt: null, daysRemaining: 0 };
+  }
 
   const daysSinceScan = differenceInCalendarDays(now, lastScanAt);
   if (daysSinceScan >= CHECK_IN_INTERVAL_DAYS) {
@@ -51,7 +64,7 @@ export function getCheckInEligibility(
   };
 }
 
-export type TodayTaskKind = "check_in" | "build_routine" | "routine" | "face_gym";
+export type TodayTaskKind = "check_in" | "routine" | "face_gym";
 
 export interface TodayTask {
   kind: TodayTaskKind;
@@ -97,18 +110,22 @@ export interface TodayBoard {
  */
 export function buildTodayBoard({
   lastScanAt,
+  lastScanFailed = false,
   routines,
   completedRoutineIds,
   faceGym,
   now = new Date(),
 }: {
   lastScanAt: Date | null;
+  /** A failed analysis produced no result, so it's treated as no scan — see `getCheckInEligibility`. */
+  lastScanFailed?: boolean;
   routines: { id: string; name: string; timeOfDay: "am" | "pm" | "both"; steps: unknown[] }[];
   completedRoutineIds: string[];
   faceGym: FaceGymStats;
   now?: Date;
 }): TodayBoard {
-  const daysSinceScan = lastScanAt ? differenceInCalendarDays(now, lastScanAt) : null;
+  const effectiveLastScanAt = lastScanFailed ? null : lastScanAt;
+  const daysSinceScan = effectiveLastScanAt ? differenceInCalendarDays(now, effectiveLastScanAt) : null;
   const scanDue = daysSinceScan === null || daysSinceScan >= CHECK_IN_INTERVAL_DAYS;
   const tasks: TodayTask[] = [];
 
@@ -127,42 +144,31 @@ export function buildTodayBoard({
     });
   }
 
-  if (routines.length === 0) {
-    // Framed as collecting something already written rather than a setup task.
-    // The plan is generated from their scan the moment they have one, so asking
-    // them to "build" a routine would be asking for work we've already done.
+  // No row when there's nothing saved yet: this audience won't build one, and
+  // an "urgent," never-completable task nagging them to only served as
+  // clutter. The generated plan stays reachable via the PrimeMove card and
+  // the Routine nav tab, without the board pretending it's a to-do.
+  for (const routine of routines) {
+    const slot = routine.timeOfDay === "am" ? "morning" : routine.timeOfDay === "pm" ? "evening" : null;
+    // The generated routines are called "Morning routine" and "Evening
+    // routine", so spelling the slot out again under the label would be the
+    // row repeating itself. Manual routines can be called anything, and those
+    // do need telling.
+    const suffix = slot && !routine.name.toLowerCase().includes(slot) ? ` · ${slot}` : "";
     tasks.push({
-      kind: "build_routine",
-      label: "Your routine",
-      detail: "Already written from your last check-in — morning and evening, in order.",
-      done: false,
+      kind: "routine",
+      label: routine.name,
+      // Deliberately the not-yet-done wording whatever the state: this row
+      // ticks optimistically, so the board rewrites the line itself the
+      // instant it's tapped rather than waiting for the server to agree.
+      detail: `${routine.steps.length} step${routine.steps.length === 1 ? "" : "s"}${suffix}`,
+      done: completedRoutineIds.includes(routine.id),
       href: "/routine",
+      // Skincare works on pigmentation, texture and the eye area, which is
+      // what the face age reading is made of.
       link: "targets",
-      urgent: !scanDue,
+      routineId: routine.id,
     });
-  } else {
-    for (const routine of routines) {
-      const slot = routine.timeOfDay === "am" ? "morning" : routine.timeOfDay === "pm" ? "evening" : null;
-      // The generated routines are called "Morning routine" and "Evening
-      // routine", so spelling the slot out again under the label would be the
-      // row repeating itself. Manual routines can be called anything, and those
-      // do need telling.
-      const suffix = slot && !routine.name.toLowerCase().includes(slot) ? ` · ${slot}` : "";
-      tasks.push({
-        kind: "routine",
-        label: routine.name,
-        // Deliberately the not-yet-done wording whatever the state: this row
-        // ticks optimistically, so the board rewrites the line itself the
-        // instant it's tapped rather than waiting for the server to agree.
-        detail: `${routine.steps.length} step${routine.steps.length === 1 ? "" : "s"}${suffix}`,
-        done: completedRoutineIds.includes(routine.id),
-        href: "/routine",
-        // Skincare works on pigmentation, texture and the eye area, which is
-        // what the face age reading is made of.
-        link: "targets",
-        routineId: routine.id,
-      });
-    }
   }
 
   tasks.push({

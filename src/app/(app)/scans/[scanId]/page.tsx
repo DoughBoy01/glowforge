@@ -19,13 +19,17 @@ import { ScoreProjection } from "@/components/app/score-projection";
 import { GoalPreview } from "@/components/app/goal-preview";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
 import { PrimeMoveCard } from "@/components/app/prime-move-card";
+import { BaselineReveal } from "@/components/app/baseline-reveal";
+import { SectionHeading } from "@/components/app/section-heading";
+import { ResultsDisclosure } from "@/components/app/results-disclosure";
 import { getDb } from "@/db";
-import { getScanById, getPreviousScan } from "@/db/queries/scans";
+import { getScanById, getPreviousScan, getFaceAgeReadings } from "@/db/queries/scans";
 import { getSimulationForScan } from "@/db/queries/skin-simulations";
 import { getPredictionForScan } from "@/db/queries/skin-predictions";
 import { getActivePartnerLinks, partnerLinkForMetric } from "@/db/queries/partners";
 import { TRACKED_METRICS, METRIC_META, OVERALL_META, scoreForMetric, trackedScores } from "@/lib/metrics";
 import { getCategoryPriorities, getProjectedScores, getSkinAgeInsight } from "@/lib/insights";
+import { buildFaceAgeMission } from "@/lib/face-age";
 import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildDailyRoutines } from "@/lib/daily-routine";
 import { buildPrimeMove } from "@/lib/prime-move";
@@ -35,19 +39,23 @@ export const metadata = { title: "Results" };
 
 export default async function ScanResultsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ scanId: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { userId } = await auth();
   const { scanId } = await params;
+  const { view } = await searchParams;
   const db = getDb();
 
   const scan = await getScanById(db, userId!, scanId);
   if (!scan) notFound();
 
-  const [previous, partnerLinks] = await Promise.all([
+  const [previous, partnerLinks, faceAgeReadings] = await Promise.all([
     getPreviousScan(db, userId!, scan.capturedAt),
     getActivePartnerLinks(db),
+    getFaceAgeReadings(db, userId!),
   ]);
 
   const latestScores = trackedScores(scan.metricScores);
@@ -79,6 +87,30 @@ export default async function ScanResultsPage({
           previous?.analysis?.status === "succeeded" ? (previous.analysis.skinAge ?? null) : null,
         )
       : null;
+
+  // The one-time baseline ceremony: only the user's first-ever scan
+  // (no `previous` — Drizzle's `findFirst` resolves `undefined`, not `null`,
+  // when nothing matches, hence `!previous` rather than `=== null`), and only
+  // right after submitting it (`?view=reveal`, set by `submitCheckIn`'s
+  // redirect) — revisiting this same URL later from `/scans` history renders
+  // the full results below instead. Checked before the simulation/prediction
+  // fetches further down so the reveal doesn't pay for round trips it
+  // doesn't render.
+  if (!previous && view === "reveal" && aiSucceeded && scan.analysis?.skinAge != null) {
+    const mission = buildFaceAgeMission([
+      { scanId: scan.id, capturedAt: scan.capturedAt, faceAge: scan.analysis.skinAge },
+    ]);
+    return <BaselineReveal mission={mission} scanId={scan.id} />;
+  }
+
+  // Whether this scan was ahead of the user's own baseline as of the date it
+  // was captured — not today's account state, so an old scan's page still
+  // reflects what was true then rather than flipping as later scans land.
+  // Gates Share below: this audience won't share until there's something to
+  // show, and "ahead" is the only state the mission calls a win.
+  const missionAsOfScan = buildFaceAgeMission(
+    faceAgeReadings.filter((r) => r.capturedAt <= scan.capturedAt),
+  );
 
   // Grades the *previous* check-in's goal image against this scan's real
   // measurement — the reconciliation half of closing the loop. `null` when
@@ -239,18 +271,14 @@ export default async function ScanResultsPage({
             />
           )}
 
-          {frontPhoto && hudConcerns.length > 0 && (
-            <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
-          )}
-
-          {concernScores.length > 0 && (
-            <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
-          )}
-
           {/* The goal, twice: once as a picture and once as numbers. The
               image is the one people feel; the bars are the one they can
               check against their next scan. Neither replaces the other, and
-              the image never appears without them. */}
+              the image never appears without them. Moved up here, right
+              after the one recommended move — this is the strongest
+              convert-to-pay moment in the app, so it sits ahead of the
+              technical detail below rather than after two dense sections of
+              scroll. */}
           {/* Not when the analysis failed: the simulation is chained off a
               successful one, so no row will ever appear and the card would
               sit there loading forever. A user with manual scores and a
@@ -284,18 +312,52 @@ export default async function ScanResultsPage({
             </Card>
           )}
 
-          {dailyRoutines.length > 0 && (
-            <div id="daily-routine" className="scroll-mt-20">
-              <DailyRoutinePlan
-                routines={dailyRoutines}
-                scanId={scan.id}
-                description="The full protocol, ordered the way you actually run it. Start with the one move above if this is more than you want on day one — every step here is built on it."
-              />
-            </div>
+          {/* Everything above is the story: what the scan found and the one
+              thing to do about it. Everything below is depth someone can
+              choose to go looking for — collapsed by default rather than
+              adding to the scroll unasked. */}
+          {(concernScores.length > 0 || dailyRoutines.length > 0) && (
+            <>
+              <SectionHeading>More detail</SectionHeading>
+
+              {concernScores.length > 0 && (
+                <ResultsDisclosure
+                  id="technical-scan"
+                  label="Full technical scan"
+                  summary={`${concernScores.length} raw signal${concernScores.length === 1 ? "" : "s"} from your photo — the detail behind your four scores.`}
+                >
+                  {frontPhoto && hudConcerns.length > 0 && (
+                    <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
+                  )}
+                  <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
+                </ResultsDisclosure>
+              )}
+
+              {dailyRoutines.length > 0 && (
+                <ResultsDisclosure
+                  id="daily-routine"
+                  label="Your daily routine"
+                  summary={dailyRoutines
+                    .map(
+                      (r) => `${r.slot.toUpperCase()} · ${r.steps.length} step${r.steps.length === 1 ? "" : "s"}`,
+                    )
+                    .join(" · ")}
+                >
+                  <DailyRoutinePlan
+                    routines={dailyRoutines}
+                    scanId={scan.id}
+                    description="The full protocol, ordered the way you actually run it. Start with the one move above if this is more than you want on day one — every step here is built on it."
+                    showSave={false}
+                  />
+                </ResultsDisclosure>
+              )}
+            </>
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <ShareButton scanId={scan.id} className="w-full sm:w-auto" />
+            {missionAsOfScan.state === "ahead" && (
+              <ShareButton scanId={scan.id} className="w-full sm:w-auto" />
+            )}
             <Button
               variant="outline"
               className="w-full sm:w-auto"

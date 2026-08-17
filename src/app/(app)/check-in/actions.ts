@@ -28,7 +28,10 @@ export async function submitCheckIn(formData: FormData) {
   // call that actually spends the AI analysis budget, and a stale client (or
   // a direct POST) shouldn't be able to skip the cooldown the UI shows.
   const latestScan = await getLatestScan(db, userId);
-  const eligibility = getCheckInEligibility(latestScan?.capturedAt ?? null);
+  const eligibility = getCheckInEligibility({
+    lastScanAt: latestScan?.capturedAt ?? null,
+    lastScanFailed: latestScan?.analysis?.status === "failed",
+  });
   if (!eligibility.eligible) redirect("/check-in");
 
   // Manual scoring is an opt-in toggle in the form — absent fields mean the
@@ -82,5 +85,11 @@ export async function submitCheckIn(formData: FormData) {
     requestSkinAnalysis({ userId, scanId, r2Key: frontPhoto.r2Key });
   }
 
-  redirect(`/scans/${scanId}`);
+  // `latestScan` was fetched above for the cooldown check — Drizzle's
+  // `findFirst` resolves `undefined`, not `null`, when nothing matches, so
+  // `!latestScan` (not `=== null`) means this is the user's first-ever scan,
+  // routed through the one-time baseline reveal instead of straight to the
+  // full results page.
+  const isFirstScan = !latestScan;
+  redirect(isFirstScan ? `/scans/${scanId}?view=reveal` : `/scans/${scanId}`);
 }

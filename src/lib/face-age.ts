@@ -28,6 +28,16 @@ export const FACE_AGE_LABEL = "Face age";
 /** The mission, in the fewest words that still say which direction is winning. */
 export const FACE_AGE_MISSION = "Fewer years on your face than you started with.";
 
+/**
+ * The honesty line next to every face age number: what actually produced
+ * it, so a specific-looking number doesn't read as a guess about someone's
+ * real age. Literal and always visible, not tap-to-reveal — the moment
+ * someone doubts the number is the moment they decide whether to trust the
+ * rest of the app.
+ */
+export const FACE_AGE_METHODOLOGY =
+  "Estimated from visible skin signals in your photo — texture, tone, firmness, and more.";
+
 export interface FaceAgeReading {
   scanId: string;
   capturedAt: Date;
