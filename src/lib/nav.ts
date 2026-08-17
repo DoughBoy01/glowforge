@@ -1,4 +1,4 @@
-import { Dumbbell, House, ScanFace, ListChecks, Settings, TrendingUp } from "lucide-react";
+import { Dumbbell, House, ListChecks, Settings, TrendingUp } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface NavItem {
@@ -8,15 +8,21 @@ export interface NavItem {
   /** Tab-bar label — has to survive a fifth of a phone's width. */
   short: string;
   icon: LucideIcon;
-  /** The one destination that gets the raised centre slot in the tab bar. */
-  primary?: boolean;
 }
 
 /**
  * The app's primary destinations, in tab order. Shared by the desktop
- * sidebar and the mobile tab bar so the two can never drift apart — and
- * ordered for the tab bar, which raises the primary action out of the middle
- * of the row, inside easy thumb reach.
+ * sidebar and the mobile tab bar so the two can never drift apart.
+ *
+ * Check-in is deliberately *not* here, even though it's the app's headline
+ * feature. A scan is due once every `CHECK_IN_INTERVAL_DAYS` — on twenty-seven
+ * days out of twenty-eight, a permanent raised camera button is an invitation
+ * to do the one thing we don't want done: burn a scan early, against skin that
+ * hasn't had time to change, and flatten the trend line the whole product is
+ * built on. So it's a pushed screen reached from wherever it's actually
+ * warranted: the day's board when it comes due, the Progress header, and the
+ * home-screen prompt. Everything left in this list is somewhere you might go
+ * on any given day.
  */
 export const NAV_ITEMS: NavItem[] = [
   // "Home", not "Dashboard": on a phone this screen answers "what should I
@@ -26,7 +32,6 @@ export const NAV_ITEMS: NavItem[] = [
   // Also the parent of /scans/[scanId], so viewing any past result keeps
   // "Progress" highlighted rather than leaving the nav with nothing active.
   { href: "/scans", label: "Progress", short: "Progress", icon: TrendingUp },
-  { href: "/check-in", label: "Check-in", short: "Scan", icon: ScanFace, primary: true },
   { href: "/routine", label: "Routine", short: "Routine", icon: ListChecks },
   // Next to Routine on purpose: both are "do the work today" screens, as
   // opposed to the measuring the two on the left do.
@@ -61,14 +66,14 @@ export function parentPath(pathname: string) {
 }
 
 /**
- * Tab order for the horizontal swipe gesture between tab roots.
+ * Tab order for the horizontal swipe gesture between tab roots — the same
+ * order as the tab bar, so the gesture matches what the eye already sees.
  *
- * The check-in tab is deliberately absent: it opens the camera, which isn't
- * somewhere you want to land by flicking sideways. Swiping therefore moves
- * Home ↔ Progress ↔ Routine ↔ Settings, and taking a scan stays an explicit
- * tap on the raised centre button.
+ * Nothing here opens the camera, which is a property worth keeping: landing on
+ * a viewfinder by flicking sideways is the one navigation accident that costs
+ * the user something.
  */
-export const SWIPE_PATHS = NAV_ITEMS.filter((item) => !item.primary).map((item) => item.href);
+export const SWIPE_PATHS = NAV_ITEMS.map((item) => item.href);
 
 /**
  * The tab a swipe should land on — `direction` is 1 for a leftward swipe
@@ -83,6 +88,9 @@ export function adjacentTab(pathname: string, direction: 1 | -1): string | null 
 
 /** Title for the mobile app bar on a pushed sub-screen. */
 export function screenTitle(pathname: string): string {
+  // No longer a tab, so it needs its title spelling out here — and it needs
+  // one, because this is the screen where a back button matters most.
+  if (pathname.startsWith("/check-in")) return "Check-in";
   if (pathname.startsWith("/scans/compare")) return "Compare";
   if (pathname.startsWith("/scans/")) return "Results";
   if (pathname.startsWith("/settings/billing")) return "Billing";

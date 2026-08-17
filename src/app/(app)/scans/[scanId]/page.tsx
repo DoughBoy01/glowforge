@@ -1,41 +1,62 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { ArrowLeftRight, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
 import { MetricCard } from "@/components/app/metric-card";
-import { SkinAgeBadge } from "@/components/app/skin-age-badge";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
+import { FaceAgeBadge } from "@/components/app/face-age-badge";
+import { PredictionCheck } from "@/components/app/prediction-check";
 import { ShareButton } from "@/components/app/share-button";
 import { AnalysisStatus } from "@/components/app/analysis-status";
 import { ResultsAnalyzing } from "@/components/app/results-analyzing";
 import { TechnicalBreakdown } from "@/components/app/technical-breakdown";
+import { DiagnosticHudScan } from "@/components/app/diagnostic-hud-scan";
 import { ScoreProjection } from "@/components/app/score-projection";
+import { GoalPreview } from "@/components/app/goal-preview";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
+import { PrimeMoveCard } from "@/components/app/prime-move-card";
+import { BaselineReveal } from "@/components/app/baseline-reveal";
+import { SectionHeading } from "@/components/app/section-heading";
+import { ResultsDisclosure } from "@/components/app/results-disclosure";
 import { getDb } from "@/db";
-import { getScanById, getPreviousScan } from "@/db/queries/scans";
+import { getScanById, getPreviousScan, getFaceAgeReadings } from "@/db/queries/scans";
+import { getSimulationForScan } from "@/db/queries/skin-simulations";
+import { getPredictionForScan } from "@/db/queries/skin-predictions";
+import { getActivePartnerLinks, partnerLinkForMetric } from "@/db/queries/partners";
 import { TRACKED_METRICS, METRIC_META, OVERALL_META, scoreForMetric, trackedScores } from "@/lib/metrics";
 import { getCategoryPriorities, getProjectedScores, getSkinAgeInsight } from "@/lib/insights";
+import { buildFaceAgeMission } from "@/lib/face-age";
+import { goalLabel, resolveGoalPreview } from "@/lib/face-simulation";
 import { buildDailyRoutines } from "@/lib/daily-routine";
+import { buildPrimeMove } from "@/lib/prime-move";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Results" };
 
 export default async function ScanResultsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ scanId: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { userId } = await auth();
   const { scanId } = await params;
+  const { view } = await searchParams;
   const db = getDb();
 
   const scan = await getScanById(db, userId!, scanId);
   if (!scan) notFound();
 
-  const previous = await getPreviousScan(db, userId!, scan.capturedAt);
+  const [previous, partnerLinks, faceAgeReadings] = await Promise.all([
+    getPreviousScan(db, userId!, scan.capturedAt),
+    getActivePartnerLinks(db),
+    getFaceAgeReadings(db, userId!),
+  ]);
 
   const latestScores = trackedScores(scan.metricScores);
   const previousScores = previous ? trackedScores(previous.metricScores) : null;
@@ -46,6 +67,7 @@ export default async function ScanResultsPage({
   const dailyRoutines = priorities.length
     ? buildDailyRoutines(priorities, scan.analysis?.concernScores ?? [])
     : [];
+  const primeMove = buildPrimeMove(priorities, scan.analysis?.concernScores ?? []);
 
   const frontPhoto = scan.photos.find((p) => p.angle === "front");
 
@@ -66,11 +88,89 @@ export default async function ScanResultsPage({
         )
       : null;
 
+  // The one-time baseline ceremony: only the user's first-ever scan
+  // (no `previous` — Drizzle's `findFirst` resolves `undefined`, not `null`,
+  // when nothing matches, hence `!previous` rather than `=== null`), and only
+  // right after submitting it (`?view=reveal`, set by `submitCheckIn`'s
+  // redirect) — revisiting this same URL later from `/scans` history renders
+  // the full results below instead. Checked before the simulation/prediction
+  // fetches further down so the reveal doesn't pay for round trips it
+  // doesn't render.
+  if (!previous && view === "reveal" && aiSucceeded && scan.analysis?.skinAge != null) {
+    const mission = buildFaceAgeMission([
+      { scanId: scan.id, capturedAt: scan.capturedAt, faceAge: scan.analysis.skinAge },
+    ]);
+    return <BaselineReveal mission={mission} scanId={scan.id} />;
+  }
+
+  // Whether this scan was ahead of the user's own baseline as of the date it
+  // was captured — not today's account state, so an old scan's page still
+  // reflects what was true then rather than flipping as later scans land.
+  // Gates Share below: this audience won't share until there's something to
+  // show, and "ahead" is the only state the mission calls a win.
+  const missionAsOfScan = buildFaceAgeMission(
+    faceAgeReadings.filter((r) => r.capturedAt <= scan.capturedAt),
+  );
+
+  // Grades the *previous* check-in's goal image against this scan's real
+  // measurement — the reconciliation half of closing the loop. `null` when
+  // there's nothing to grade yet (first-ever scan, or the previous check-in
+  // predates this feature / never got a usable simulation).
+  const predictionCheck =
+    aiSucceeded &&
+    scan.analysis?.skinAge != null &&
+    previous?.prediction?.status === "succeeded" &&
+    previous.prediction.predictedSkinAge != null
+      ? {
+          predictedSkinAge: previous.prediction.predictedSkinAge,
+          actualSkinAge: scan.analysis.skinAge,
+          sourceCapturedAt: previous.capturedAt,
+        }
+      : null;
+
   const concernScores = scan.analysis?.concernScores.map((c) => ({
     concern: c.concern,
     uiScore: c.uiScore,
     hasMask: c.maskUrl != null,
   })) ?? [];
+
+  // Worst-first, capped at 10 — the `.stagger` utility's nth-child delay
+  // table only covers that many children before the last one absorbs the
+  // rest, so past that the "arrival" reads as simultaneous, not staggered.
+  const hudConcerns = concernScores.filter((c) => c.hasMask).sort((a, b) => a.uiScore - b.uiScore).slice(0, 6);
+  const hasHudScan = !!frontPhoto && hudConcerns.length > 0;
+
+  // Reused in two different layouts below (first scan vs. returning), so
+  // its copy only ever needs to change in one place.
+  const whatWeFoundCard = (
+    <Card className="border-border/60">
+      <CardHeader>
+        <CardTitle>What we found</CardTitle>
+        <CardDescription>Your four tracked categories from this check-in.</CardDescription>
+      </CardHeader>
+      {priorities[0] && (
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Biggest opportunity:{" "}
+            <span className="font-medium text-foreground">
+              {METRIC_META[priorities[0].metric].label}
+            </span>{" "}
+            — {priorities[0].guidance}
+          </p>
+        </CardContent>
+      )}
+    </Card>
+  );
+
+  // The goal image, and the prediction closing the loop on it — this scan's
+  // own, not the previous scan's (that's `predictionCheck`, above).
+  const simulation = frontPhoto ? await getSimulationForScan(db, userId!, scan.id) : null;
+  const prediction = frontPhoto ? await getPredictionForScan(db, userId!, scan.id) : null;
+  const goalPreview = resolveGoalPreview({
+    simulation,
+    concernScores: scan.analysis?.concernScores ?? [],
+    priorities,
+  });
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 md:gap-6">
@@ -83,8 +183,8 @@ export default async function ScanResultsPage({
             {previous ? ` · vs your ${formatDate(previous.capturedAt)} check-in` : " · Your first scan"}
           </p>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          {previous && (
+        {previous && (
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <Button
               variant="outline"
               className="flex-1 sm:flex-none"
@@ -95,13 +195,13 @@ export default async function ScanResultsPage({
                 </Link>
               }
             />
-          )}
-          <Button
-            variant="outline"
-            className="flex-1 sm:flex-none"
-            render={<Link href="/scans">All check-ins</Link>}
-          />
-        </div>
+            <Button
+              variant="outline"
+              className="flex-1 sm:flex-none"
+              render={<Link href="/scans">All check-ins</Link>}
+            />
+          </div>
+        )}
       </div>
 
       {aiInFlight && !latestScores && (
@@ -127,41 +227,40 @@ export default async function ScanResultsPage({
             <AnalysisStatus scanId={scan.id} initialStatus={aiStatus} />
           )}
 
-          <div className="grid gap-4 md:grid-cols-[auto_1fr]">
-            <Card className="flex flex-col items-center justify-center gap-4 border-border/60 p-6">
-              {frontPhoto && (
-                <Image
-                  src={`/api/photos/${scan.id}/front`}
-                  alt=""
-                  width={112}
-                  height={112}
-                  className="size-28 rounded-full object-cover ring-1 ring-border/60"
+          {/* The score ring + photo is dropped for a first-ever scan: it
+              repeats the number BaselineReveal already showed once, and
+              again below via FaceAgeBadge — for someone with nothing to
+              compare it to yet, it's a second scoreboard before the first
+              one landed. */}
+          {previous ? (
+            <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+              <Card className="flex flex-col items-center justify-center gap-4 border-border/60 p-6">
+                {frontPhoto && (
+                  <Image
+                    src={`/api/photos/${scan.id}/front`}
+                    alt=""
+                    width={112}
+                    height={112}
+                    className="size-28 rounded-full object-cover ring-1 ring-border/60"
+                  />
+                )}
+                <ScoreRing
+                  score={overall ?? 0}
+                  label={OVERALL_META.label}
+                  className="size-40 md:size-30"
                 />
-              )}
-              <ScoreRing
-                score={overall ?? 0}
-                label={OVERALL_META.label}
-                className="size-40 md:size-30"
-              />
-            </Card>
-            <Card className="border-border/60">
-              <CardHeader>
-                <CardTitle>What we found</CardTitle>
-                <CardDescription>Your four tracked categories from this check-in.</CardDescription>
-              </CardHeader>
-              {priorities[0] && (
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Biggest opportunity:{" "}
-                    <span className="font-medium text-foreground">
-                      {METRIC_META[priorities[0].metric].label}
-                    </span>{" "}
-                    — {priorities[0].guidance}
-                  </p>
-                </CardContent>
-              )}
-            </Card>
-          </div>
+                <ScoreLevelBadge score={overall ?? 0} />
+              </Card>
+              {whatWeFoundCard}
+            </div>
+          ) : (
+            whatWeFoundCard
+          )}
+
+          {/* Above the four metric cards, not fifth in the row with them. This
+              is what the check-in was for; those are the reasons behind it. */}
+          {skinAgeInsight && <FaceAgeBadge insight={skinAgeInsight} />}
+          {predictionCheck && <PredictionCheck {...predictionCheck} />}
 
           <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
             {TRACKED_METRICS.map((metric) => (
@@ -172,11 +271,55 @@ export default async function ScanResultsPage({
                 previousScore={previousScores?.[metric] ?? null}
               />
             ))}
-            {skinAgeInsight && <SkinAgeBadge insight={skinAgeInsight} />}
           </div>
 
-          {concernScores.length > 0 && (
-            <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
+          {/* Straight after the diagnosis and well before the plan. Anyone who
+              reads the top of this page and leaves should still be walking out
+              with something to buy and something to do — the goal image, the
+              projection and the full routine are all worth more once someone
+              has taken one step, and worth nothing to someone the wall of
+              steps has already lost. */}
+          {primeMove && (
+            <PrimeMoveCard
+              move={primeMove}
+              partner={partnerLinkForMetric(partnerLinks, primeMove.metric)}
+              href={dailyRoutines.length > 0 ? "#daily-routine" : "/routine"}
+            />
+          )}
+
+          {/* First-ever scan only: the visual diagnostic (a picture — marks
+              overlaid on the user's own photo) promoted ahead of the goal
+              simulation, so results land before the sales pitch. Not shown
+              here for a returning user — their copy stays inside "More
+              detail" below, exactly where Beat 5 put it. */}
+          {!previous && hasHudScan && (
+            <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
+          )}
+
+          {/* The goal, twice: once as a picture and once as numbers. The
+              image is the one people feel; the bars are the one they can
+              check against their next scan. Neither replaces the other, and
+              the image never appears without them. Right after the one
+              recommended move for a returning user — this is the strongest
+              convert-to-pay moment in the app, so it sits ahead of the
+              technical detail below rather than after two dense sections of
+              scroll. A first-timer sees the diagnostic scan above first. */}
+          {/* Not when the analysis failed: the simulation is chained off a
+              successful one, so no row will ever appear and the card would
+              sit there loading forever. A user with manual scores and a
+              failed analysis reaches this branch, which is the only way that
+              combination happens. */}
+          {frontPhoto && !aiFailed && (
+            <GoalPreview
+              scanId={scan.id}
+              status={simulation?.status ?? null}
+              goalLabel={goalLabel(goalPreview.goal)}
+              summary={goalPreview.summary}
+              params={goalPreview.params}
+              horizonWeeks={goalPreview.goal.horizonWeeks}
+              initialPredictionStatus={prediction?.status ?? null}
+              initialPredictedSkinAge={prediction?.predictedSkinAge ?? null}
+            />
           )}
 
           {projected.length > 0 && (
@@ -194,16 +337,56 @@ export default async function ScanResultsPage({
             </Card>
           )}
 
-          {dailyRoutines.length > 0 && (
-            <DailyRoutinePlan
-              routines={dailyRoutines}
-              scanId={scan.id}
-              description="Built from this check-in and ordered the way you actually run it. Save it and we'll track it for you."
-            />
+          {/* Everything above is the story: what the scan found and the one
+              thing to do about it. Everything below is depth someone can
+              choose to go looking for — collapsed by default rather than
+              adding to the scroll unasked. */}
+          {(concernScores.length > 0 || dailyRoutines.length > 0) && (
+            <>
+              <SectionHeading>More detail</SectionHeading>
+
+              {concernScores.length > 0 && (
+                <ResultsDisclosure
+                  id="technical-scan"
+                  label="Full technical scan"
+                  summary={`${concernScores.length} raw signal${concernScores.length === 1 ? "" : "s"} from your photo — the detail behind your four scores.`}
+                >
+                  {/* Only for a returning user — a first-timer already saw
+                      this above, ahead of the goal panel; showing it twice
+                      would be the exact redundancy this beat removed
+                      elsewhere on the page. */}
+                  {previous && hasHudScan && (
+                    <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
+                  )}
+                  <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
+                </ResultsDisclosure>
+              )}
+
+              {dailyRoutines.length > 0 && (
+                <ResultsDisclosure
+                  id="daily-routine"
+                  label="Your daily routine"
+                  summary={dailyRoutines
+                    .map(
+                      (r) => `${r.slot.toUpperCase()} · ${r.steps.length} step${r.steps.length === 1 ? "" : "s"}`,
+                    )
+                    .join(" · ")}
+                >
+                  <DailyRoutinePlan
+                    routines={dailyRoutines}
+                    scanId={scan.id}
+                    description="The full protocol, ordered the way you actually run it. Start with the one move above if this is more than you want on day one — every step here is built on it."
+                    showSave={false}
+                  />
+                </ResultsDisclosure>
+              )}
+            </>
           )}
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            <ShareButton scanId={scan.id} className="w-full sm:w-auto" />
+            {missionAsOfScan.state === "ahead" && (
+              <ShareButton scanId={scan.id} className="w-full sm:w-auto" />
+            )}
             <Button
               variant="outline"
               className="w-full sm:w-auto"

@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { isAuthBypassEnabled } from "@/lib/auth";
 
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
@@ -12,6 +13,16 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+  if (isAuthBypassEnabled) {
+    // Dev bypass: no Clerk session exists, so `auth.protect()` would
+    // redirect every protected route to sign-in. Treat the visitor as
+    // signed in and just keep the root "/" redirect from the marketing site.
+    if (req.nextUrl.pathname === "/") {
+      return NextResponse.redirect(new URL("/dashboard", req.url));
+    }
+    return;
+  }
+
   if (isProtectedRoute(req)) {
     await auth.protect();
   }

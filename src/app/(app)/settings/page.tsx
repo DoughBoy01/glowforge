@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { CopyLinkButton } from "@/components/app/copy-link-button";
@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/app/theme-toggle";
 import { ThemedUserButton } from "@/components/providers/clerk-themed";
 import { getDb } from "@/db";
 import { getUserById } from "@/db/queries/users";
-import { APP_URL } from "@/lib/constants";
+import { APP_NAME, APP_URL } from "@/lib/constants";
 
 export const metadata = { title: "Settings" };
 
@@ -36,7 +36,7 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Appearance</CardTitle>
           <CardDescription>
-            Follows your device by default, so GlowForge switches with everything else.
+            Follows your device by default, so {APP_NAME} switches with everything else.
           </CardDescription>
         </CardHeader>
         <CardContent>

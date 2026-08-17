@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
 import { isSubScreen, screenTitle } from "@/lib/nav";
+import { useAppBack } from "@/hooks/use-app-back";
 import { haptic } from "@/lib/haptics";
 
 /**
@@ -19,7 +20,11 @@ import { haptic } from "@/lib/haptics";
  */
 export function MobileAppBar() {
   const pathname = usePathname();
-  const router = useRouter();
+  // Not a bare `router.back()`: the manifest has a shortcut that launches
+  // straight into /check-in, and since check-in became a pushed screen that's a
+  // cold start with no in-app history to pop. Popping it anyway would close the
+  // PWA on the first tap of a back button that's pointing at Home.
+  const goBack = useAppBack();
   const nested = isSubScreen(pathname);
 
   return (
@@ -34,7 +39,7 @@ export function MobileAppBar() {
               type="button"
               onClick={() => {
                 haptic("select");
-                router.back();
+                goBack();
               }}
               className="press -ml-1 flex size-11 items-center justify-center rounded-lg text-foreground outline-none active:bg-muted/50 focus-visible:ring-3 focus-visible:ring-ring/50"
             >
@@ -48,14 +53,12 @@ export function MobileAppBar() {
         ) : (
           <Link
             href="/dashboard"
-            className="press-sm ml-1 flex min-w-0 flex-1 items-center gap-2.5 outline-none"
+            className="press-sm ml-1 flex min-w-0 flex-1 items-center gap-2 font-mono text-lg font-bold tracking-tight outline-none"
           >
-            <span className="flex size-7 -skew-x-6 items-center justify-center bg-primary font-mono text-sm font-bold text-primary-foreground dark:shadow-[2px_2px_0] dark:shadow-accent/50">
-              G
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">
+              S
             </span>
-            <span className="truncate font-script text-2xl text-primary dark:[text-shadow:0_0_14px_rgba(255,46,136,.8),0_0_40px_rgba(255,46,136,.4)]">
-              {APP_NAME}
-            </span>
+            <span className="truncate">{APP_NAME}</span>
           </Link>
         )}
       </div>

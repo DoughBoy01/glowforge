@@ -23,14 +23,14 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <Link href="/dashboard" className="flex items-center gap-2.5 px-2 py-1">
-          <span className="flex h-7 w-7 -skew-x-6 items-center justify-center bg-primary font-mono text-sm font-bold text-primary-foreground dark:shadow-[2px_2px_0] dark:shadow-accent/50">
-            G
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 px-2 py-1 font-mono text-lg font-bold tracking-tight"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-sm text-primary-foreground">
+            S
           </span>
-          {/* The neon bloom only reads as neon against the dark base. */}
-          <span className="font-script text-2xl text-primary dark:[text-shadow:0_0_14px_rgba(255,46,136,.8),0_0_40px_rgba(255,46,136,.4)]">
-            {APP_NAME}
-          </span>
+          {APP_NAME}
         </Link>
       </SidebarHeader>
       <SidebarContent>

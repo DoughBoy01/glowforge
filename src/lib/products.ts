@@ -56,14 +56,19 @@ export const PRODUCTS: Record<TrackedMetric | "radiance", Product[]> = {
   ],
   firmness: [
     {
-      id: "ordinary-granactive-retinoid",
+      // Retinol, not the granactive ester this used to be. The prime move
+      // card prints an exact spec ("0.25-0.5% retinol") directly above these
+      // picks, and a pick that doesn't satisfy the spec it sits under sends
+      // someone back to reading labels — which is the whole thing that card
+      // exists to spare them.
+      id: "ordinary-retinol-05",
       brand: "The Ordinary",
-      name: "Granactive Retinoid 2% Emulsion",
+      name: "Retinol 0.5% in Squalane",
       category: "Retinoid",
       tier: "budget",
-      price: "~$10",
-      why: "A milder retinoid ester — good starting point if you've never used one before.",
-      affiliateUrl: amazonSearch("The Ordinary Granactive Retinoid 2% Emulsion"),
+      price: "~$8",
+      why: "Straight retinol at the strength to start on, in squalane so it stings less than a water-based one.",
+      affiliateUrl: amazonSearch("The Ordinary Retinol 0.5% in Squalane"),
     },
     {
       id: "skinceuticals-retinol-03",
@@ -88,14 +93,17 @@ export const PRODUCTS: Record<TrackedMetric | "radiance", Product[]> = {
       affiliateUrl: amazonSearch("The Ordinary Caffeine Solution 5% EGCG"),
     },
     {
-      id: "kiehls-eye-concentrate",
+      // Also caffeine, for the same reason as the retinol swap above: the
+      // budget and premium picks have to be two answers to one spec, not two
+      // different ingredients that happen to go near an eye.
+      id: "kiehls-facial-fuel-eye",
       brand: "Kiehl's",
-      name: "Powerful-Strength Line-Reducing Eye-Brightening Concentrate",
+      name: "Facial Fuel Eye De-Puffer",
       category: "Eye treatment",
       tier: "premium",
-      price: "~$56",
-      why: "Vitamin C targeted at the eye area specifically, where skin is thinner and needs a gentler formula.",
-      affiliateUrl: amazonSearch("Kiehl's Powerful-Strength Line-Reducing Eye-Brightening Concentrate"),
+      price: "~$32",
+      why: "Caffeine in a rollerball built for men — the cool metal tip does as much for puffiness as the formula does.",
+      affiliateUrl: amazonSearch("Kiehl's Facial Fuel Eye De-Puffer"),
     },
   ],
   moisture: [

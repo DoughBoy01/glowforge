@@ -106,6 +106,50 @@ export function getFaceGymCoachLine(stats: FaceGymStats): CoachLine {
   };
 }
 
+/**
+ * The one-line version, for surfaces outside the Face Gym screen — currently
+ * the home board's row, where there's no headline above it to lean on and no
+ * room for two sentences.
+ *
+ * It exists because `getFaceGymCoachLine`'s bodies are written to sit under a
+ * headline that has already said how many days it's been: lift one onto another
+ * screen and you get "You have never trained a single one of them", with
+ * nothing anywhere near it saying what "them" is. Same two rules as the rest of
+ * this file — the number always comes from the log, and the jab is always at the
+ * habit.
+ */
+export function getFaceGymRowLine(stats: FaceGymStats): string {
+  const { totalSessions, streak, bestStreak, sessionsToday, daysSinceLast } = stats;
+
+  if (sessionsToday > 0) {
+    return streak > 1 ? `Done · ${streak}-day streak.` : "Done today.";
+  }
+
+  if (totalSessions === 0 || daysSinceLast === null) {
+    return "43 muscles in your face, none of them ever trained. Three minutes.";
+  }
+
+  if (daysSinceLast >= 30) {
+    return `${daysSinceLast} days off. You'd have noticed skipping leg day this long.`;
+  }
+
+  if (daysSinceLast >= 7) {
+    return bestStreak >= 3
+      ? `${daysSinceLast} days off. You once ran ${bestStreak} straight.`
+      : `${daysSinceLast} days off a three-minute workout.`;
+  }
+
+  if (daysSinceLast >= 2) {
+    return `${daysSinceLast} days off. Two more and there's no habit left to break.`;
+  }
+
+  // Trained yesterday, so the streak is alive until midnight — the one state
+  // where naming the number is the whole nudge.
+  return streak > 0
+    ? `${streak}-day streak, alive until midnight. Three minutes.`
+    : "Six rounds, a minute each.";
+}
+
 export interface CoachVerdict extends CoachLine {
   /** Set when this session landed on a milestone streak day. */
   milestone: number | null;

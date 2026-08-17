@@ -1,17 +1,24 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { auth } from "@/lib/auth";
 import { ArrowRight, ImageOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { ScoreRing } from "@/components/app/score-ring";
 import { DeltaBadge } from "@/components/app/delta-badge";
+import { ScoreLevelBadge } from "@/components/app/score-level-badge";
 import { ScanComparePicker } from "@/components/app/scan-compare-picker";
 import { ShareButton } from "@/components/app/share-button";
 import { getDb } from "@/db";
-import { getScanHistory, getScanById, getConcernScoresForScans } from "@/db/queries/scans";
+import {
+  getScanHistory,
+  getScanById,
+  getConcernScoresForScans,
+  getFaceAgeReadings,
+} from "@/db/queries/scans";
 import { compareScans, compareConcerns } from "@/lib/progress";
+import { FACE_AGE_LABEL, buildFaceAgeMission } from "@/lib/face-age";
 import { formatDate } from "@/lib/format";
 
 export const metadata = { title: "Compare check-ins" };
@@ -27,9 +34,10 @@ export default async function CompareScansPage({
   const { userId } = await auth();
   const db = getDb();
 
-  const [{ from: fromParam, to: toParam }, history] = await Promise.all([
+  const [{ from: fromParam, to: toParam }, history, faceAgeReadings] = await Promise.all([
     searchParams,
     getScanHistory(db, userId!, { limit: PICKER_LIMIT }),
+    getFaceAgeReadings(db, userId!),
   ]);
 
   if (history.length < 2) {
@@ -73,6 +81,12 @@ export default async function CompareScansPage({
   // "delta" always reads as later-minus-earlier.
   const [earlier, later] =
     from.capturedAt <= to.capturedAt ? [from, to] : [to, from];
+
+  // As-of-`later` mission state, same rule as the results page: Share only
+  // once the mission was "ahead" by the date of the later scan in view.
+  const missionAsOfLater = buildFaceAgeMission(
+    faceAgeReadings.filter((r) => r.capturedAt <= later.capturedAt),
+  );
 
   const concernRows = await getConcernScoresForScans(db, userId!, [earlier.id, later.id]);
 
@@ -142,7 +156,7 @@ export default async function CompareScansPage({
           ))}
           {earlierAge !== null && laterAge !== null && (
             <div className="flex items-center justify-between gap-4 py-2.5">
-              <span className="text-sm font-medium">Skin age</span>
+              <span className="text-sm font-medium">{FACE_AGE_LABEL}</span>
               <div className="flex items-baseline gap-3 font-mono text-sm tabular-nums">
                 <span className="text-muted-foreground">{earlierAge}</span>
                 <ArrowRight className="size-3 self-center text-muted-foreground" />
@@ -183,12 +197,14 @@ export default async function CompareScansPage({
       )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <ShareButton
-          scanId={later.id}
-          compareScanId={earlier.id}
-          label="Share progress"
-          className="w-full sm:w-auto"
-        />
+        {missionAsOfLater.state === "ahead" && (
+          <ShareButton
+            scanId={later.id}
+            compareScanId={earlier.id}
+            label="Share progress"
+            className="w-full sm:w-auto"
+          />
+        )}
         <Button
           variant="outline"
           className="w-full sm:w-auto"
@@ -238,6 +254,7 @@ function ScanSide({
           label={formatDate(scan.capturedAt)}
           className="size-24 md:size-28"
         />
+        <ScoreLevelBadge score={overall} />
       </CardContent>
     </Card>
   );

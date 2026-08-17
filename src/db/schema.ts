@@ -226,6 +226,113 @@ export const skinConcernScores = sqliteTable(
 );
 
 // ---------------------------------------------------------------------------
+// Skin simulations — the goal image. One per scan, produced by chaining the
+// completed analysis into YouCam's AI Skin Simulation: the measured concern
+// scores pick the per-concern intensities (see `@/lib/face-simulation`), and
+// the vendor renders those onto the user's own front photo.
+//
+// `params` stores the exact intensities that were sent, as JSON. That's not
+// debug residue — the UI shows the user which concerns the image is claiming
+// to change, and a stored payload is the only way that caption can't drift
+// from the picture. It also makes a tuning change auditable after the fact:
+// "why does my August image look stronger than my July one" has an answer.
+//
+// `r2Key` mirrors the vendor's output, whose presigned URL dies after 2 hours
+// — the same reason `persistConcernMasks` exists for masks.
+// ---------------------------------------------------------------------------
+export const skinSimulations = sqliteTable(
+  "skin_simulations",
+  {
+    id: id(),
+    scanId: text("scan_id")
+      .notNull()
+      .references(() => scans.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: ["youcam"] })
+      .notNull()
+      .default("youcam"),
+    status: text("status", {
+      enum: ["pending", "processing", "succeeded", "failed", "skipped"],
+    })
+      .notNull()
+      .default("pending"),
+    // What the image is aiming at — a tracked metric, or "overall". Stored so
+    // the caption matches the picture even after the user's priorities shift.
+    goalFocus: text("goal_focus", {
+      enum: ["sun_damage", "firmness", "eye_area", "moisture", "overall"],
+    })
+      .notNull()
+      .default("overall"),
+    goalHorizonWeeks: integer("goal_horizon_weeks").notNull().default(12),
+    params: text("params"), // JSON — { wrinkle: 0.3, spots: 0.2, ... } as sent
+    providerFileId: text("provider_file_id"),
+    providerTaskId: text("provider_task_id"),
+    r2Key: text("r2_key"), // mirrored result image
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    requestedAt: integer("requested_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("skin_simulations_scan_unique_idx").on(t.scanId),
+    index("skin_simulations_user_status_idx").on(t.userId, t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Skin predictions — closes the loop. One per scan: the goal image from
+// `skinSimulations` is fed back through the same YouCam skin-analysis
+// endpoint used on real photos, so the vendor's own analysis grades its own
+// generation. Deliberately its own table, never `skinAnalyses` — that table
+// (and `getFaceAgeReadings`, which powers the real face-age mission number)
+// has no discriminator column and assumes every row came from a real photo.
+// A predicted result living anywhere near it risks corrupting or impersonating
+// real face-age history; this table can only ever be read where it's asked
+// for by name.
+// ---------------------------------------------------------------------------
+export const skinPredictions = sqliteTable(
+  "skin_predictions",
+  {
+    id: id(),
+    scanId: text("scan_id")
+      .notNull()
+      .references(() => scans.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider", { enum: ["youcam"] })
+      .notNull()
+      .default("youcam"),
+    status: text("status", {
+      enum: ["pending", "processing", "succeeded", "failed", "skipped"],
+    })
+      .notNull()
+      .default("pending"),
+    predictedSkinAge: integer("predicted_skin_age"),
+    predictedOverallScore: integer("predicted_overall_score"),
+    providerFileId: text("provider_file_id"),
+    providerTaskId: text("provider_task_id"),
+    rawResult: text("raw_result"), // JSON string — full vendor task response
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    requestedAt: integer("requested_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+    completedAt: integer("completed_at", { mode: "timestamp" }),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex("skin_predictions_scan_unique_idx").on(t.scanId),
+    index("skin_predictions_user_status_idx").on(t.userId, t.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Routines — the fitness-tracker-style habit loop. Steps are the plan,
 // completions are the log entries streaks are computed from.
 // ---------------------------------------------------------------------------
@@ -275,6 +382,7 @@ export const routineSteps = sqliteTable(
         "retinoid",
         "moisturizer",
         "treatment",
+        "shaving",
         "other",
       ],
     })
@@ -386,7 +494,26 @@ export const partnerLinks = sqliteTable("partner_links", {
   description: text("description"),
   targetUrl: text("target_url").notNull(),
   imageUrl: text("image_url"),
+  /**
+   * The concern this placement answers — one of the four tracked metrics or
+   * `radiance`, matching `PrimeMoveMetric` in `lib/prime-move.ts`. Set it and
+   * the link becomes eligible as the partner pick on the single
+   * recommendation for that concern; leave it null and the link stays a
+   * general placement, which is what every pre-existing row is. Untyped on
+   * purpose — it's hand-managed data, and a D1 CHECK constraint here would
+   * mean a migration every time the metric list moves.
+   */
+  metric: text("metric"),
   isActive: integer("is_active", { mode: "boolean" }).notNull().default(true),
+  /**
+   * Promotes a row onto the signed-in home's promotions panel. Deliberately
+   * separate from `isActive` — every partner link on this table is a
+   * candidate for the quiet affiliate teaser at the foot of the dashboard,
+   * but the panel is prominent, image-led real estate right under the
+   * mission, and belongs to a small hand-picked set rather than growing with
+   * every row added here.
+   */
+  isFeatured: integer("is_featured", { mode: "boolean" }).notNull().default(false),
   sortOrder: integer("sort_order").notNull().default(0),
   ...timestamps,
 });
@@ -425,6 +552,18 @@ export const scansRelations = relations(scans, ({ one, many }) => ({
   photos: many(scanPhotos),
   metricScores: many(metricScores),
   analysis: one(skinAnalyses),
+  simulation: one(skinSimulations),
+  prediction: one(skinPredictions),
+}));
+
+export const skinSimulationsRelations = relations(skinSimulations, ({ one }) => ({
+  scan: one(scans, { fields: [skinSimulations.scanId], references: [scans.id] }),
+  user: one(users, { fields: [skinSimulations.userId], references: [users.id] }),
+}));
+
+export const skinPredictionsRelations = relations(skinPredictions, ({ one }) => ({
+  scan: one(scans, { fields: [skinPredictions.scanId], references: [scans.id] }),
+  user: one(users, { fields: [skinPredictions.userId], references: [users.id] }),
 }));
 
 export const scanPhotosRelations = relations(scanPhotos, ({ one }) => ({

@@ -1,12 +1,15 @@
 import {
   YOUCAM_FILE_ENDPOINT,
   YOUCAM_TASK_ENDPOINT,
+  YOUCAM_SIMULATION_FILE_ENDPOINT,
+  YOUCAM_SIMULATION_TASK_ENDPOINT,
   YOUCAM_MAX_FILE_SIZE_BYTES,
   YOUCAM_MAX_RETRIES,
   YOUCAM_POLL_INTERVAL_MS,
   YOUCAM_POLL_MAX_INTERVAL_MS,
   YOUCAM_POLL_TIMEOUT_MS,
   YOUCAM_REQUEST_TIMEOUT_MS,
+  type SimulationParam,
 } from "./constants";
 import {
   YouCamApiError,
@@ -105,12 +108,17 @@ async function youcamFetch(url: string, init: RequestInit, attempt = 1): Promise
 /**
  * Uploads an image to YouCam's staging storage: request a presigned URL via
  * the file API, then PUT the bytes directly to it. Returns the `file_id`
- * used to create an analysis task.
+ * used to create a task.
+ *
+ * `endpoint` selects which feature the upload is scoped to — file ids are not
+ * portable between features, so an analysis upload can't be fed to a
+ * simulation task or vice versa.
  */
-export async function uploadImageForAnalysis(params: {
+async function uploadImage(params: {
   bytes: ArrayBuffer;
   contentType: string;
   fileName: string;
+  endpoint: string;
 }): Promise<string> {
   if (params.bytes.byteLength > YOUCAM_MAX_FILE_SIZE_BYTES) {
     throw new YouCamInputError(
@@ -119,7 +127,7 @@ export async function uploadImageForAnalysis(params: {
     );
   }
 
-  const initRes = await youcamFetch(YOUCAM_FILE_ENDPOINT, {
+  const initRes = await youcamFetch(params.endpoint, {
     method: "POST",
     body: JSON.stringify({
       files: [
@@ -154,6 +162,22 @@ export async function uploadImageForAnalysis(params: {
   return file.file_id;
 }
 
+export function uploadImageForAnalysis(params: {
+  bytes: ArrayBuffer;
+  contentType: string;
+  fileName: string;
+}): Promise<string> {
+  return uploadImage({ ...params, endpoint: YOUCAM_FILE_ENDPOINT });
+}
+
+export function uploadImageForSimulation(params: {
+  bytes: ArrayBuffer;
+  contentType: string;
+  fileName: string;
+}): Promise<string> {
+  return uploadImage({ ...params, endpoint: YOUCAM_SIMULATION_FILE_ENDPOINT });
+}
+
 /** Creates a skin-analysis task for a previously uploaded file. Returns the task id to poll. */
 export async function createSkinAnalysisTask(params: {
   fileId: string;
@@ -173,6 +197,45 @@ export async function createSkinAnalysisTask(params: {
   return taskId;
 }
 
+/**
+ * Creates a skin-simulation task. Unlike the analysis endpoint's
+ * `dst_actions` array, intensities go on the body as flat top-level floats
+ * (`{src_file_id, wrinkle: 0.3, spots: 0.2, ...}`).
+ *
+ * Params at 0 are omitted rather than sent explicitly: the vendor's all-zero
+ * rejection is a JSON-Schema `not` over the *present* properties, and sending
+ * a wall of zeroes with one real value is a needlessly fragile thing to lean
+ * on. An empty set is rejected here rather than at the vendor, since its 400
+ * for that case ("Instance matched a schema which it should not have") is
+ * impossible to act on.
+ */
+export async function createSkinSimulationTask(params: {
+  fileId: string;
+  intensities: Partial<Record<SimulationParam, number>>;
+}): Promise<string> {
+  const active = Object.entries(params.intensities).filter(
+    ([, value]) => typeof value === "number" && value > 0,
+  );
+  if (active.length === 0) {
+    throw new YouCamInputError(
+      "Skin simulation needs at least one parameter above 0",
+      "error_invalid_params",
+    );
+  }
+
+  const res = await youcamFetch(YOUCAM_SIMULATION_TASK_ENDPOINT, {
+    method: "POST",
+    body: JSON.stringify({
+      src_file_id: params.fileId,
+      ...Object.fromEntries(active),
+    }),
+  });
+  const body = (await res.json()) as YouCamTaskCreateResponse;
+  const taskId = body.data?.task_id ?? body.result?.task_id ?? body.task_id;
+  if (!taskId) throw new YouCamError("YouCam simulation task response missing task_id");
+  return taskId;
+}
+
 /** Normalizes the real `{status, data: {task_status, ...}}` envelope onto the flat fields callers expect. */
 function normalizeTaskStatus(body: YouCamTaskStatusResponse): YouCamTaskStatusResponse {
   const data = body.data;
@@ -187,10 +250,30 @@ function normalizeTaskStatus(body: YouCamTaskStatusResponse): YouCamTaskStatusRe
   };
 }
 
-export async function getTaskStatus(taskId: string): Promise<YouCamTaskStatusResponse> {
-  const res = await youcamFetch(`${YOUCAM_TASK_ENDPOINT}/${taskId}`, { method: "GET" });
+export async function getTaskStatus(
+  taskId: string,
+  endpoint: string = YOUCAM_TASK_ENDPOINT,
+): Promise<YouCamTaskStatusResponse> {
+  const res = await youcamFetch(`${endpoint}/${taskId}`, { method: "GET" });
   const body = (await res.json()) as YouCamTaskStatusResponse;
   return normalizeTaskStatus(body);
+}
+
+/**
+ * Pulls the download URL out of a completed image-producing task. The link is
+ * a presigned URL that expires in two hours, so callers must mirror the bytes
+ * into our own storage rather than persisting the URL.
+ */
+export function extractResultUrl(status: YouCamTaskStatusResponse): string | null {
+  const results = status.results;
+  if (Array.isArray(results)) {
+    const url = results.find((r) => typeof r?.url === "string")?.url;
+    return url ?? null;
+  }
+  if (results && typeof results.url === "string") return results.url;
+  // Older/flatter envelope: `result: { url }`.
+  const flat = status.result?.url;
+  return typeof flat === "string" ? flat : null;
 }
 
 /**
@@ -202,14 +285,18 @@ export async function getTaskStatus(taskId: string): Promise<YouCamTaskStatusRes
  */
 export async function pollTaskUntilComplete(
   taskId: string,
-  opts: { timeoutMs?: number; onStatus?: (status: YouCamTaskStatusResponse) => void } = {},
+  opts: {
+    timeoutMs?: number;
+    endpoint?: string;
+    onStatus?: (status: YouCamTaskStatusResponse) => void;
+  } = {},
 ): Promise<YouCamTaskStatusResponse> {
   const timeoutMs = opts.timeoutMs ?? YOUCAM_POLL_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
   let interval = YOUCAM_POLL_INTERVAL_MS;
 
   for (;;) {
-    const status = await getTaskStatus(taskId);
+    const status = await getTaskStatus(taskId, opts.endpoint);
     opts.onStatus?.(status);
 
     if (status.status === "success") return status;

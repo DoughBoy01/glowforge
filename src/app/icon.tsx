@@ -40,7 +40,7 @@ export default function Icon({ id }: { id: string }) {
             letterSpacing: -2,
           }}
         >
-          G
+          S
         </div>
       </div>
     ),

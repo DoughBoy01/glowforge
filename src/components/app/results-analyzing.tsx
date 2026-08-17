@@ -67,7 +67,7 @@ export function ResultsAnalyzing({
       <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
         <Loader2 className="size-8 animate-spin text-primary" />
         <div>
-          <div className="text-lg font-semibold">Analyzing your skin</div>
+          <div className="text-lg font-semibold">Analyzing your face</div>
           <div className="mt-1 text-sm text-muted-foreground">{STAGES[stage]}</div>
         </div>
         <Progress value={((stage + 1) / STAGES.length) * 100} className="w-full max-w-xs" />

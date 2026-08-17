@@ -1,5 +1,5 @@
 /**
- * The four measured dimensions GlowForge tracks, plus the derived
+ * The four measured dimensions SUHOJA tracks, plus the derived
  * "overall" composite. Single source of truth for labels/order/weights so
  * the check-in form, dashboard charts, and share cards can't drift apart.
  */

@@ -80,7 +80,9 @@ export function parseTaskResult(raw: YouCamTaskStatusResponse): ParsedAnalysisRe
     concerns.push({ concern: name, rawScore, uiScore, maskUrl: fields.mask_url });
   };
 
-  const output = raw.results?.output;
+  // `results` is a union — only its object form carries analysis output.
+  const results = Array.isArray(raw.results) ? undefined : raw.results;
+  const output = results?.output;
   if (Array.isArray(output)) {
     for (const entry of output) {
       if (isRecord(entry) && typeof entry.type === "string") pushEntry(entry.type, entry);
@@ -98,8 +100,8 @@ export function parseTaskResult(raw: YouCamTaskStatusResponse): ParsedAnalysisRe
     skinAgeFromOutput ??
     (typeof raw.skin_age === "number"
       ? raw.skin_age
-      : typeof raw.results?.skin_age === "number"
-        ? raw.results.skin_age
+      : typeof results?.skin_age === "number"
+        ? results.skin_age
         : isRecord(raw.result) && typeof raw.result.skin_age === "number"
           ? raw.result.skin_age
           : null);
@@ -108,7 +110,7 @@ export function parseTaskResult(raw: YouCamTaskStatusResponse): ParsedAnalysisRe
 }
 
 /**
- * Maps YouCam's raw concerns onto GlowForge's four tracked metrics. Weights
+ * Maps YouCam's raw concerns onto SUHOJA's four tracked metrics. Weights
  * are a deliberate product simplification, not a clinical claim:
  *  - sun_damage leans on pigmentation/photoaging signals — age spots are
  *    the clearest UV marker, wrinkles/redness/radiance are secondary.

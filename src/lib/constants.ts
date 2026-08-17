@@ -1,7 +1,7 @@
-export const APP_NAME = "GlowForge";
+export const APP_NAME = "SUHOJA";
 export const APP_TAGLINE = "Train your skin like you train your body.";
 export const APP_DESCRIPTION =
-  "GlowForge is a skin performance tracker for men 35+. Measure sun damage, firmness, eye area, and moisture over time, follow a routine, and track real progress — not guesswork.";
+  "SUHOJA is a skin performance tracker for men 35+. Measure sun damage, firmness, eye area, and moisture over time, follow a routine, and track real progress — not guesswork.";
 
 export const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";

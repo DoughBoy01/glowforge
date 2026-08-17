@@ -93,3 +93,40 @@ export function describeInputError(code: string): string {
       return "That photo couldn't be analyzed. Try a different photo.";
   }
 }
+
+/**
+ * Maps any thrown error to a stored (code, user-facing message) pair. Lives
+ * here rather than in `skin-analysis.ts` so both that module and
+ * `skin-prediction.ts` can share it without importing each other — the two
+ * background jobs are siblings, not a dependency chain.
+ */
+export function describeFailure(err: unknown): { code: string; message: string } {
+  if (err instanceof YouCamInputError) {
+    return { code: err.code, message: describeInputError(err.code) };
+  }
+  if (err instanceof YouCamRateLimitError) {
+    return {
+      code: "rate_limited",
+      message: "Analysis is temporarily busy — we'll retry shortly.",
+    };
+  }
+  if (err instanceof YouCamTaskFailedError) {
+    // Some task-level failures (bad resolution, face too small, ...) are
+    // really input problems surfaced asynchronously — give them the same
+    // friendly, actionable copy as a synchronous input rejection.
+    if (err.code && isInputErrorCode(err.code)) {
+      return { code: err.code, message: describeInputError(err.code) };
+    }
+    return {
+      code: err.code ?? "task_failed",
+      message: "The analysis couldn't be completed for that photo. Try a different one.",
+    };
+  }
+  if (err instanceof YouCamTimeoutError) {
+    return { code: "timeout", message: "Analysis is taking longer than expected. Try again shortly." };
+  }
+  if (err instanceof YouCamError) {
+    return { code: "youcam_error", message: "Analysis failed. Try again shortly." };
+  }
+  return { code: "unknown", message: "Something went wrong analyzing that photo." };
+}

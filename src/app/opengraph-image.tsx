@@ -41,7 +41,7 @@ export default function OpengraphImage() {
               color: "#f0803c",
             }}
           >
-            G
+            S
           </div>
           <div style={{ display: "flex", fontSize: 40, fontWeight: 700, color: "#f5f5f0" }}>
             {APP_NAME}

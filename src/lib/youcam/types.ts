@@ -66,7 +66,7 @@ export interface YouCamTaskStatusResponse {
     error?: string | { code?: string; message?: string };
     skin_age?: number;
     result?: Record<string, unknown>;
-    results?: { output?: unknown; skin_age?: number };
+    results?: YouCamTaskResults;
   };
   // Flat fallbacks, kept in case the envelope drifts again.
   status?: YouCamTaskStatus;
@@ -74,5 +74,16 @@ export interface YouCamTaskStatusResponse {
   error?: string | { code?: string; message?: string };
   skin_age?: number;
   result?: Record<string, unknown>;
-  results?: { output?: unknown; skin_age?: number };
+  results?: YouCamTaskResults;
 }
+
+/**
+ * `results` carries analysis output (`output`) *or*, for image-producing
+ * features like skin simulation, a download `url` valid for two hours. The
+ * vendor's schema names the simulation payload a "single url result" but
+ * doesn't pin whether it arrives as an object or a one-element array, so both
+ * are typed here and `extractResultUrl` handles either.
+ */
+export type YouCamTaskResults =
+  | { output?: unknown; skin_age?: number; url?: string }
+  | { url?: string }[];

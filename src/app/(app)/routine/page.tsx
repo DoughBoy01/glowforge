@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
-import { Flame, Plus, ScanFace } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { Plus, ScanFace } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -29,16 +29,37 @@ import {
 } from "@/components/ui/select";
 import { LogCompletionButton } from "@/components/app/log-completion-button";
 import { DailyRoutinePlan } from "@/components/app/daily-routine";
+import { PrimeMoveCard } from "@/components/app/prime-move-card";
+import { RoutinePlanTabs } from "@/components/app/routine-plan-tabs";
+import { PromotionsPanel } from "@/components/app/promotions-panel";
 import { SaveRoutineButton } from "@/components/app/save-routine-button";
 import { getDb } from "@/db";
-import { getActiveRoutines, getCompletionDates, getRoutineStreak } from "@/db/queries/routines";
+import {
+  getActiveRoutines,
+  getCompletionsByRoutine,
+  deriveRoutineProgress,
+} from "@/db/queries/routines";
+import {
+  getActivePartnerLinks,
+  getFeaturedPartnerLinks,
+  partnerLinkForMetric,
+} from "@/db/queries/partners";
 import { getRoutinePlan } from "@/lib/routine-plan";
+import { FACE_AGE_LABEL } from "@/lib/face-age";
 import { todayLocalDate, formatShortDate } from "@/lib/format";
 import { createRoutineAction } from "./actions";
 
 export const metadata = { title: "Routine" };
 
-const CATEGORIES = ["cleanser", "sunscreen", "retinoid", "moisturizer", "treatment", "other"];
+const CATEGORIES = [
+  "cleanser",
+  "sunscreen",
+  "retinoid",
+  "moisturizer",
+  "treatment",
+  "shaving",
+  "other",
+];
 
 const TIME_LABEL: Record<string, string> = {
   am: "Morning",
@@ -49,26 +70,38 @@ const TIME_LABEL: Record<string, string> = {
 export default async function RoutinePage() {
   const { userId } = await auth();
   const db = getDb();
-  const [routines, plan] = await Promise.all([
+  // All three in one batch. The streaks and today's state used to be fetched per
+  // routine *after* the routine list arrived — two statements each, in a second
+  // serial round trip — which on a phone meant nothing rendered until both hops
+  // had finished.
+  const [routines, plan, completions, partnerLinks, featuredPromotions] = await Promise.all([
     getActiveRoutines(db, userId!),
     getRoutinePlan(db, userId!),
+    getCompletionsByRoutine(db, userId!),
+    getActivePartnerLinks(db),
+    getFeaturedPartnerLinks(db),
   ]);
   const today = todayLocalDate();
 
-  const routineDetails = await Promise.all(
-    routines.map(async (routine) => ({
-      routine,
-      streak: await getRoutineStreak(db, userId!, routine.id),
-      doneToday: (await getCompletionDates(db, userId!, routine.id, 1)).includes(today),
-    })),
-  );
+  const routineDetails = routines.map((routine) => ({
+    routine,
+    ...deriveRoutineProgress(completions, routine.id, today),
+  }));
 
   const hasGenerated = routines.some((r) => r.source === "generated");
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 md:gap-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Routine</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight">Routine</h1>
+          {/* Says what the screen is in service of. Skincare acts on
+              pigmentation, texture and the eye area, which is exactly what the
+              scan grades — so this is a claim the measurement supports. */}
+          <p className="text-sm text-muted-foreground">
+            The daily work behind your {FACE_AGE_LABEL.toLowerCase()}.
+          </p>
+        </div>
         <BottomSheet>
           {/* Secondary on purpose: the plan below is already built, and the
               manual builder is the escape hatch for someone who wants to
@@ -138,11 +171,25 @@ export default async function RoutinePage() {
           scores, the plan is already written — this page's job is to hand it
           over, not to hand over an empty form. */}
       {routineDetails.length === 0 && plan && (
-        <DailyRoutinePlan
-          routines={plan.routines}
-          scanId={plan.scanId}
-          description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it. Save it and we'll track it for you.`}
-        />
+        plan.primeMove ? (
+          <RoutinePlanTabs
+            primeMove={plan.primeMove}
+            partner={partnerLinkForMetric(partnerLinks, plan.primeMove.metric)}
+            fullRoutine={
+              <DailyRoutinePlan
+                routines={plan.routines}
+                scanId={plan.scanId}
+                description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it.`}
+              />
+            }
+          />
+        ) : (
+          <DailyRoutinePlan
+            routines={plan.routines}
+            scanId={plan.scanId}
+            description={`We built this from your ${formatShortDate(plan.capturedAt)} check-in — ordered the way you actually run it.`}
+          />
+        )
       )}
 
       {routineDetails.length === 0 && !plan && (
@@ -159,7 +206,7 @@ export default async function RoutinePage() {
         </Card>
       )}
 
-      {routineDetails.map(({ routine, streak, doneToday }) => (
+      {routineDetails.map(({ routine, doneToday }) => (
         <Card key={routine.id} className="border-border/60">
           <CardHeader className="flex flex-row items-start justify-between gap-3">
             <div className="min-w-0">
@@ -169,9 +216,6 @@ export default async function RoutinePage() {
                 {routine.source === "generated" && (
                   <Badge variant="outline">Built for you</Badge>
                 )}
-                <span className="flex items-center gap-1 font-mono text-xs">
-                  <Flame className="size-3.5 text-primary" /> {streak} day streak
-                </span>
               </CardDescription>
             </div>
             {/* On a phone the day's one action belongs at the bottom of the
@@ -205,6 +249,16 @@ export default async function RoutinePage() {
           </CardContent>
         </Card>
       ))}
+
+      {/* The one recommended product — visible even with saved routines. */}
+      {routineDetails.length > 0 && plan?.primeMove && (
+        <PrimeMoveCard
+          move={plan.primeMove}
+          partner={partnerLinkForMetric(partnerLinks, plan.primeMove.metric)}
+        />
+      )}
+
+      <PromotionsPanel promotions={featuredPromotions} />
 
       {/* Scores move, so the plan should too. Re-saving rewrites the steps on
           the same routine rows, which is what keeps the streak intact. */}

@@ -12,18 +12,23 @@ export interface CategoryPriority {
   delta: number | null;
 }
 
+// Labels describe absolute standing on the 0-100 scale, never a trajectory —
+// "On track" used to sit here and implied a journey a first-ever baseline
+// reading hasn't had yet ("72 — On Track — Baseline" read as a
+// contradiction). Guidance text avoids presupposing an existing routine too,
+// for the same reason `home.ts` stopped pushing routine-building as a task.
 const LEVEL_COPY: Record<PriorityLevel, { label: string; guidance: string }> = {
   critical: {
     label: "Critical",
-    guidance: "Your lowest-scoring category — prioritize this in your routine.",
+    guidance: "Your lowest-scoring category — prioritize this first.",
   },
   needs_work: {
     label: "Needs work",
-    guidance: "Below where it should be. Worth a dedicated routine step.",
+    guidance: "Below where it should be — worth extra attention.",
   },
   on_track: {
-    label: "On track",
-    guidance: "Solid and stable — keep the current routine going.",
+    label: "Solid",
+    guidance: "Comfortably in range. Nothing urgent here.",
   },
   excellent: {
     label: "Excellent",
@@ -31,11 +36,27 @@ const LEVEL_COPY: Record<PriorityLevel, { label: string; guidance: string }> = {
   },
 };
 
-function levelForScore(score: number): PriorityLevel {
+export function levelForScore(score: number): PriorityLevel {
   if (score < 40) return "critical";
   if (score < 60) return "needs_work";
   if (score < 80) return "on_track";
   return "excellent";
+}
+
+/** The canonical label for a tier — the one place this copy is allowed to live. */
+export function labelForLevel(level: PriorityLevel): string {
+  return LEVEL_COPY[level].label;
+}
+
+/**
+ * The qualitative read on a bare 0-100 score, for any screen that shows one
+ * without the surrounding context `getCategoryPriorities` builds. Every
+ * tracked metric and the overall composite share this scale — higher is
+ * always better — so one threshold set covers both.
+ */
+export function scoreLevelLabel(score: number): { level: PriorityLevel; label: string } {
+  const level = levelForScore(score);
+  return { level, label: labelForLevel(level) };
 }
 
 /**
@@ -69,13 +90,18 @@ export interface SkinAgeInsight {
   message: string;
 }
 
-/** Skin age is only ever compared to the user's own history — we don't collect chronological age. */
+/**
+ * Face age is only ever compared to the user's own history — we don't collect
+ * chronological age, so there is no "younger than you are" claim available here.
+ * The field keeps the vendor's `skinAge` name; every user-facing surface calls it
+ * face age via `FACE_AGE_LABEL`.
+ */
 export function getSkinAgeInsight(
   skinAge: number,
   previousSkinAge: number | null,
 ): SkinAgeInsight {
   const delta = previousSkinAge === null ? null : skinAge - previousSkinAge;
-  let message = `Estimated skin age: ${skinAge}.`;
+  let message = `Estimated face age: ${skinAge}.`;
   if (delta !== null && delta !== 0) {
     message +=
       delta < 0
@@ -85,6 +111,36 @@ export function getSkinAgeInsight(
     message += " Unchanged since your last scan.";
   }
   return { skinAge, deltaFromPrevious: delta, message };
+}
+
+export interface PredictionCheckInsight {
+  predictedSkinAge: number;
+  actualSkinAge: number;
+  /** actual - predicted; negative means the real scan beat the projection. */
+  delta: number;
+  message: string;
+}
+
+/**
+ * Grades the previous check-in's goal-image projection against this scan's
+ * real measurement. Deliberately its own function rather than a call to
+ * `getSkinAgeInsight` with the projection in place of "previous" — that
+ * function's copy ("Down N since your last scan — trending younger") is
+ * written for a real scan-over-scan delta, and reusing it here would make a
+ * predicted-vs-actual comparison read as a real mission claim it isn't.
+ */
+export function getPredictionCheckInsight(
+  predictedSkinAge: number,
+  actualSkinAge: number,
+): PredictionCheckInsight {
+  const delta = actualSkinAge - predictedSkinAge;
+  const message =
+    delta === 0
+      ? `Right on target — your last goal image projected ${predictedSkinAge}, and that's what this scan measured.`
+      : delta < 0
+        ? `Beat the projection — your last goal image projected ${predictedSkinAge}; this scan measured ${actualSkinAge}.`
+        : `Came in above the projection — your last goal image projected ${predictedSkinAge}; this scan measured ${actualSkinAge}.`;
+  return { predictedSkinAge, actualSkinAge, delta, message };
 }
 
 export interface ProjectedScore {
@@ -104,10 +160,13 @@ const PROJECTED_GAIN: Record<PriorityLevel, number> = {
 
 /**
  * Pairs each category's current score with a realistic near-term target,
- * for the "current vs improved" visualization on the results page. This is
- * intentionally a projection grounded in the user's own measured scores —
- * not a synthesized "after" photo, which would be both misleading and
- * outside what any of our data actually supports.
+ * for the "current vs improved" visualization on the results page.
+ *
+ * These gains are also the realism reference the goal *image* is tuned
+ * against — `@/lib/face-simulation` caps its simulation intensities so the
+ * rendered picture describes roughly the same 8-12 week outcome these bars
+ * do. If `PROJECTED_GAIN` moves, that model should move with it, or the page
+ * will show a picture and a number that disagree.
  */
 export function getProjectedScores(priorities: CategoryPriority[]): ProjectedScore[] {
   return priorities.map((p) => ({

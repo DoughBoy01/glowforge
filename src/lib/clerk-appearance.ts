@@ -1,6 +1,6 @@
 import { dark } from "@clerk/themes";
 
-/** Matches the GlowForge Tactical dark palette in globals.css. */
+/** Matches the SUHOJA Tactical dark palette in globals.css. */
 export const clerkAppearanceDark = {
   baseTheme: dark,
   variables: {

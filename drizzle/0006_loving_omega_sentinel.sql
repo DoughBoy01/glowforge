@@ -1,0 +1,1 @@
+ALTER TABLE `partner_links` ADD `is_featured` integer DEFAULT false NOT NULL;
