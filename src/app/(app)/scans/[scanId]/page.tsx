@@ -138,6 +138,29 @@ export default async function ScanResultsPage({
   // table only covers that many children before the last one absorbs the
   // rest, so past that the "arrival" reads as simultaneous, not staggered.
   const hudConcerns = concernScores.filter((c) => c.hasMask).sort((a, b) => a.uiScore - b.uiScore).slice(0, 6);
+  const hasHudScan = !!frontPhoto && hudConcerns.length > 0;
+
+  // Reused in two different layouts below (first scan vs. returning), so
+  // its copy only ever needs to change in one place.
+  const whatWeFoundCard = (
+    <Card className="border-border/60">
+      <CardHeader>
+        <CardTitle>What we found</CardTitle>
+        <CardDescription>Your four tracked categories from this check-in.</CardDescription>
+      </CardHeader>
+      {priorities[0] && (
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            Biggest opportunity:{" "}
+            <span className="font-medium text-foreground">
+              {METRIC_META[priorities[0].metric].label}
+            </span>{" "}
+            — {priorities[0].guidance}
+          </p>
+        </CardContent>
+      )}
+    </Card>
+  );
 
   // The goal image, and the prediction closing the loop on it — this scan's
   // own, not the previous scan's (that's `predictionCheck`, above).
@@ -160,8 +183,8 @@ export default async function ScanResultsPage({
             {previous ? ` · vs your ${formatDate(previous.capturedAt)} check-in` : " · Your first scan"}
           </p>
         </div>
-        <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          {previous && (
+        {previous && (
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <Button
               variant="outline"
               className="flex-1 sm:flex-none"
@@ -172,13 +195,13 @@ export default async function ScanResultsPage({
                 </Link>
               }
             />
-          )}
-          <Button
-            variant="outline"
-            className="flex-1 sm:flex-none"
-            render={<Link href="/scans">All check-ins</Link>}
-          />
-        </div>
+            <Button
+              variant="outline"
+              className="flex-1 sm:flex-none"
+              render={<Link href="/scans">All check-ins</Link>}
+            />
+          </div>
+        )}
       </div>
 
       {aiInFlight && !latestScores && (
@@ -204,42 +227,35 @@ export default async function ScanResultsPage({
             <AnalysisStatus scanId={scan.id} initialStatus={aiStatus} />
           )}
 
-          <div className="grid gap-4 md:grid-cols-[auto_1fr]">
-            <Card className="flex flex-col items-center justify-center gap-4 border-border/60 p-6">
-              {frontPhoto && (
-                <Image
-                  src={`/api/photos/${scan.id}/front`}
-                  alt=""
-                  width={112}
-                  height={112}
-                  className="size-28 rounded-full object-cover ring-1 ring-border/60"
+          {/* The score ring + photo is dropped for a first-ever scan: it
+              repeats the number BaselineReveal already showed once, and
+              again below via FaceAgeBadge — for someone with nothing to
+              compare it to yet, it's a second scoreboard before the first
+              one landed. */}
+          {previous ? (
+            <div className="grid gap-4 md:grid-cols-[auto_1fr]">
+              <Card className="flex flex-col items-center justify-center gap-4 border-border/60 p-6">
+                {frontPhoto && (
+                  <Image
+                    src={`/api/photos/${scan.id}/front`}
+                    alt=""
+                    width={112}
+                    height={112}
+                    className="size-28 rounded-full object-cover ring-1 ring-border/60"
+                  />
+                )}
+                <ScoreRing
+                  score={overall ?? 0}
+                  label={OVERALL_META.label}
+                  className="size-40 md:size-30"
                 />
-              )}
-              <ScoreRing
-                score={overall ?? 0}
-                label={OVERALL_META.label}
-                className="size-40 md:size-30"
-              />
-              <ScoreLevelBadge score={overall ?? 0} />
-            </Card>
-            <Card className="border-border/60">
-              <CardHeader>
-                <CardTitle>What we found</CardTitle>
-                <CardDescription>Your four tracked categories from this check-in.</CardDescription>
-              </CardHeader>
-              {priorities[0] && (
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Biggest opportunity:{" "}
-                    <span className="font-medium text-foreground">
-                      {METRIC_META[priorities[0].metric].label}
-                    </span>{" "}
-                    — {priorities[0].guidance}
-                  </p>
-                </CardContent>
-              )}
-            </Card>
-          </div>
+                <ScoreLevelBadge score={overall ?? 0} />
+              </Card>
+              {whatWeFoundCard}
+            </div>
+          ) : (
+            whatWeFoundCard
+          )}
 
           {/* Above the four metric cards, not fifth in the row with them. This
               is what the check-in was for; those are the reasons behind it. */}
@@ -271,14 +287,23 @@ export default async function ScanResultsPage({
             />
           )}
 
+          {/* First-ever scan only: the visual diagnostic (a picture — marks
+              overlaid on the user's own photo) promoted ahead of the goal
+              simulation, so results land before the sales pitch. Not shown
+              here for a returning user — their copy stays inside "More
+              detail" below, exactly where Beat 5 put it. */}
+          {!previous && hasHudScan && (
+            <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
+          )}
+
           {/* The goal, twice: once as a picture and once as numbers. The
               image is the one people feel; the bars are the one they can
               check against their next scan. Neither replaces the other, and
-              the image never appears without them. Moved up here, right
-              after the one recommended move — this is the strongest
+              the image never appears without them. Right after the one
+              recommended move for a returning user — this is the strongest
               convert-to-pay moment in the app, so it sits ahead of the
               technical detail below rather than after two dense sections of
-              scroll. */}
+              scroll. A first-timer sees the diagnostic scan above first. */}
           {/* Not when the analysis failed: the simulation is chained off a
               successful one, so no row will ever appear and the card would
               sit there loading forever. A user with manual scores and a
@@ -326,7 +351,11 @@ export default async function ScanResultsPage({
                   label="Full technical scan"
                   summary={`${concernScores.length} raw signal${concernScores.length === 1 ? "" : "s"} from your photo — the detail behind your four scores.`}
                 >
-                  {frontPhoto && hudConcerns.length > 0 && (
+                  {/* Only for a returning user — a first-timer already saw
+                      this above, ahead of the goal panel; showing it twice
+                      would be the exact redundancy this beat removed
+                      elsewhere on the page. */}
+                  {previous && hasHudScan && (
                     <DiagnosticHudScan scanId={scan.id} concerns={hudConcerns} />
                   )}
                   <TechnicalBreakdown concerns={concernScores} scanId={scan.id} />
